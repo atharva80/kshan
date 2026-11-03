@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Video Search</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#4250af">
+<style>
+  :root {
+    --bg: #f6f7fb; --surface: #ffffff; --text: #1b1d24; --muted: #646a7a; --line: #e2e5ee;
+    --accent: #4250af; --accent-text: #ffffff; --chip: #eef0f8;
+    --seen: #2f7d5b; --said: #a1532a; --written: #6a43a8; --danger: #b3261e;
+    --radius: 14px; color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101217; --surface: #1a1d25; --text: #eceef4; --muted: #9aa1b2; --line: #2b2f3b;
+      --accent: #aab4ff; --accent-text: #11132a; --chip: #242836;
+      --seen: #7fd3ad; --said: #f0a679; --written: #c3a5f5; --danger: #f2b8b5; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", sans-serif; }
+  main { max-width: 780px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px 48px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  header h1 { font-size: 1.25rem; margin: 0; flex: 1; }
+  .who { color: var(--muted); font-size: .9rem; }
+  form.search { display: flex; gap: 8px; }
+  input[type=search], input[type=email], input[type=password] {
+    flex: 1; min-width: 0; font: inherit; padding: 12px 14px; border-radius: var(--radius);
+    border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { font: inherit; cursor: pointer; }
+  .primary { background: var(--accent); color: var(--accent-text); border: 0; border-radius: var(--radius);
+             padding: 0 18px; font-weight: 600; min-height: 46px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 4px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px;
+          padding: 6px 14px; font-size: .9rem; }
+  .chip[aria-pressed=true] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .status { color: var(--muted); font-size: .85rem; margin: 8px 0 16px; min-height: 1.2em; }
+  .card { display: grid; grid-template-columns: 148px 1fr; gap: 12px; background: var(--surface);
+          border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; margin-bottom: 12px; }
+  .poster { position: relative; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: var(--chip);
+            aspect-ratio: 16/10; }
+  .poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .dur { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.65); color: #fff;
+         font-size: .75rem; padding: 1px 6px; border-radius: 6px; }
+  .info { min-width: 0; }
+  .title { font-weight: 600; font-size: .95rem; overflow-wrap: anywhere; }
+  .sub { color: var(--muted); font-size: .8rem; margin-bottom: 6px; }
+  .moments { display: flex; flex-wrap: wrap; gap: 6px; }
+  .moment { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; border: 0; border-radius: 10px;
+            background: var(--chip); color: var(--text); padding: 5px 9px; font-size: .82rem; text-align: left; }
+  .moment b { font-variant-numeric: tabular-nums; }
+  .moment span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; color: var(--muted); }
+  .k { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .k.visual { color: var(--seen); } .k.speech { color: var(--said); } .k.text { color: var(--written); }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  .actions { display: flex; justify-content: center; margin-top: 8px; }
+  .ghost { background: transparent; border: 1px solid var(--line); color: var(--text); border-radius: var(--radius);
+           padding: 10px 16px; }
+  dialog { border: 0; padding: 0; border-radius: var(--radius); background: var(--surface); color: var(--text);
+           width: min(780px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
+  dialog::backdrop { background: rgba(0,0,0,.7); }
+  dialog video { width: 100%; max-height: 60vh; background: #000; display: block; }
+  .dialog-body { padding: 12px 14px 16px; }
+  .dialog-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .dialog-top .title { flex: 1; }
+  .dialog-top a { color: var(--accent); font-size: .9rem; white-space: nowrap; }
+  .close { background: var(--chip); border: 0; border-radius: 10px; padding: 6px 10px; color: var(--text); }
+  .login { max-width: 380px; margin: 40px auto; background: var(--surface); border: 1px solid var(--line);
+           border-radius: var(--radius); padding: 20px; display: grid; gap: 10px; }
+  .login p { margin: 0 0 6px; color: var(--muted); font-size: .9rem; }
+  .error { color: var(--danger); font-size: .9rem; min-height: 1.2em; }
+  .hidden { display: none !important; }
+  @media (max-width: 520px) {
+    .card { grid-template-columns: 1fr; }
+    .poster { aspect-ratio: 16/9; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Video Search</h1>
+    <span class="who" id="who"></span>
+  </header>
+
+  <form class="login hidden" id="login">
+    <strong>Log in with your Immich account</strong>
+    <p>Same email and password as the Immich app.</p>
+    <input type="email" id="email" placeholder="Email" autocomplete="username" required>
+    <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
+    <div class="error" id="login-error"></div>
+    <button class="primary" type="submit">Log in</button>
+  </form>
+
+  <section id="app" class="hidden">
+    <form class="search" id="search">
+      <input type="search" id="q" placeholder="cat on the bed, happy birthday, Goa…" autocomplete="off" enterkeyhint="search">
+      <button class="primary" type="submit">Search</button>
+    </form>
+    <div class="chips" role="group" aria-label="Search in">
+      <button type="button" class="chip" data-kind="all" aria-pressed="true">Everything</button>
+      <button type="button" class="chip" data-kind="visual" aria-pressed="false">On screen</button>
+      <button type="button" class="chip" data-kind="speech" aria-pressed="false">Said</button>
+      <button type="button" class="chip" data-kind="text" aria-pressed="false">Written</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div id="results"></div>
+    <div class="actions hidden" id="album-row"><button class="ghost" id="album">Save these videos as an Immich album</button></div>
+  </section>
+</main>
+
+<dialog id="player">
+  <video id="video" controls playsinline preload="metadata"></video>
+  <div class="dialog-body">
+    <div class="dialog-top">
+      <div class="title" id="player-title"></div>
+      <a id="open-immich" target="_blank" rel="noopener">Open in Immich</a>
+      <button class="close" id="close" aria-label="Close">✕</button>
+    </div>
+    <div class="moments" id="player-moments"></div>
+  </div>
+</dialog>
+
+<script>
+// Works both at https://<immich>/vsearch/ and directly on its own port.
+const base = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
+if (!location.pathname.endsWith('/')) history.replaceState(null, '', base + location.search);
+const $ = (id) => document.getElementById(id);
+const api = (path, opts = {}) => fetch(base + 'api/' + path, { credentials: 'same-origin', ...opts });
+const LABEL = { visual: 'Seen', speech: 'Said', text: 'Written' };
+let kind = 'all', immichUrl = '', lastResults = [], lastQuery = '', statusTimer = null;
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clock = (ms) => {
+  const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(r).padStart(2, '0');
+};
+const when = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
+const frameUrl = (id, ms) => ms == null ? '' : `${base}api/frame/${id}/${ms}.webp`;
+
+async function start() {
+  const res = await api('me');
+  if (res.status === 401) return showLogin();
+  const me = await res.json();
+  immichUrl = me.immichUrl || '';
+  $('who').textContent = me.name || '';
+  $('login').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  refreshStatus();
+  $('q').focus();
+}
+
+function showLogin() {
+  $('app').classList.add('hidden');
+  $('login').classList.remove('hidden');
+  $('email').focus();
+}
+
+$('login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('login-error').textContent = '';
+  const res = await api('login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
+  if (!res.ok) { $('login-error').textContent = 'Wrong email or password.'; return; }
+  $('password').value = '';
+  start();
+});
+
+async function refreshStatus() {
+  clearTimeout(statusTimer);
+  const res = await api('status');
+  if (!res.ok) return;
+  const s = await res.json();
+  if (!lastQuery) {
+    let text = s.videos === 0 ? 'No videos yet. Anything you upload to Immich gets indexed automatically.'
+      : `${s.indexed} of ${s.videos} videos indexed`;
+    if (s.pending > 0) text += ` · ${s.pending} in progress`;
+    if (s.failed > 0) text += ` · ${s.failed} couldn't be read`;
+    $('status').textContent = text;
+  }
+  if (s.pending > 0) statusTimer = setTimeout(refreshStatus, 15000);
+}
+
+document.querySelectorAll('.chip').forEach((chip) => chip.addEventListener('click', () => {
+  kind = chip.dataset.kind;
+  document.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+  if ($('q').value.trim()) runSearch();
+}));
+
+$('search').addEventListener('submit', (e) => { e.preventDefault(); runSearch(); });
+
+async function runSearch() {
+  const q = $('q').value.trim();
+  if (!q) return;
+  lastQuery = q;
+  $('status').textContent = 'Searching…';
+  const res = await api(`search?q=${encodeURIComponent(q)}&kind=${kind}`);
+  if (res.status === 401) return showLogin();
+  if (!res.ok) { $('status').textContent = 'Search failed. Try again in a moment.'; return; }
+  const data = await res.json();
+  lastResults = data.results;
+  $('status').textContent = data.results.length
+    ? `${data.results.length} video${data.results.length === 1 ? '' : 's'} · ${data.took_ms} ms`
+    : '';
+  render(data.results);
+}
+
+function momentButton(r, m) {
+  const snippet = m.text ? `<span>${esc(m.text)}</span>` : '';
+  return `<button class="moment" data-id="${r.assetId}" data-ms="${m.ms}">
+    <span class="k ${m.kind}">${LABEL[m.kind]}</span><b>${clock(m.ms)}</b>${snippet}</button>`;
+}
+
+function render(results) {
+  $('album-row').classList.toggle('hidden', results.length === 0);
+  if (!results.length) {
+    $('results').innerHTML = `<div class="empty">Nothing found for “${esc(lastQuery)}”.</div>`;
+    return;
+  }
+  $('results').innerHTML = results.map((r) => `
+    <article class="card">
+      <button class="poster" data-id="${r.assetId}" data-ms="${r.best.ms}" aria-label="Play from ${clock(r.best.ms)}">
+        <img src="${frameUrl(r.assetId, r.best.frameMs)}" alt="" loading="lazy">
+        ${r.duration ? `<span class="dur">${clock(r.duration * 1000)}</span>` : ''}
+      </button>
+      <div class="info">
+        <div class="title">${esc(r.fileName)}</div>
+        <div class="sub">${when(r.takenAt)}</div>
+        <div class="moments">${r.moments.map((m) => momentButton(r, m)).join('')}</div>
+      </div>
+    </article>`).join('');
+}
+
+$('results').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-ms]');
+  if (btn) openPlayer(btn.dataset.id, Number(btn.dataset.ms));
+});
+
+function openPlayer(id, ms) {
+  const r = lastResults.find((x) => x.assetId === id);
+  const video = $('video');
+  $('player-title').textContent = r ? r.fileName : '';
+  $('open-immich').href = `${immichUrl}/photos/${id}`;
+  $('player-moments').innerHTML = r ? r.moments.map((m) => momentButton(r, m)).join('') : '';
+  const seek = () => { video.currentTime = ms / 1000; video.play().catch(() => {}); };
+  if (video.dataset.id === id && video.readyState > 0) seek();
+  else {
+    video.dataset.id = id;
+    video.src = `${base}api/play/${id}`;
+    video.addEventListener('loadedmetadata', seek, { once: true });
+  }
+  if (!$('player').open) $('player').showModal();
+}
+
+$('player-moments').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-ms]');
+  if (btn) openPlayer(btn.dataset.id, Number(btn.dataset.ms));
+});
+$('close').addEventListener('click', () => $('player').close());
+$('player').addEventListener('close', () => $('video').pause());
+
+$('album').addEventListener('click', async () => {
+  const btn = $('album');
+  btn.disabled = true;
+  const res = await api('album', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: `Search: ${lastQuery}`, assetIds: lastResults.map((r) => r.assetId) }) });
+  btn.textContent = res.ok ? `Saved as album “Search: ${lastQuery}”` : 'Could not create the album';
+  setTimeout(() => { btn.disabled = false; btn.textContent = 'Save these videos as an Immich album'; }, 4000);
+});
+
+start();
+</script>
+</body>
+</html>

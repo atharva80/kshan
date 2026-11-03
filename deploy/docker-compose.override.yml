@@ -1,0 +1,71 @@
+# Drop this next to Immich's official docker-compose.yml (which stays untouched, so an
+# Immich update is just re-downloading that file). Docker Compose merges the two.
+#
+# Expects: the NVIDIA container toolkit (02-gpu-setup.sh), this repo copied to ./vsearch,
+# and the external volume `docker volume create immich-vsearch-models`.
+services:
+  immich-server:
+    # Only reachable from this machine; Tailscale serve publishes it to the tailnet
+    # (03-tailscale-serve.sh). Remove this block to keep Immich's default 0.0.0.0:2283.
+    ports: !override
+      - '127.0.0.1:2283:2283'
+    # NVENC hardware transcoding (same as upstream hwaccel.transcoding.yml "nvenc").
+    # Also set Administration > Video Transcoding > Hardware acceleration = NVENC.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, video]
+
+  immich-machine-learning:
+    # CUDA build of Immich's ML image (same as upstream hwaccel.ml.yml "cuda")
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}-cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Video search: indexes what's on screen / said / written in videos, writes it back into
+  # Immich's own search, and serves the search page (published at /vsearch).
+  vsearch:
+    container_name: immich_vsearch
+    build: ./vsearch
+    image: immich-vsearch:local
+    env_file:
+      - .env            # DB_PASSWORD, DB_USERNAME, DB_DATABASE_NAME from Immich's own .env
+    environment:
+      VSEARCH_ML_URL: http://immich-machine-learning:3003
+      VSEARCH_IMMICH_URL: http://immich-server:2283
+      HF_HUB_DISABLE_XET: '1'  # plain HTTP model downloads; Xet transfers can stall
+    volumes:
+      - ${UPLOAD_LOCATION}:/data:ro          # read-only: the indexer never touches media files
+      - /srv/immich/vsearch:/state           # frame thumbnails for the search page
+      - vsearch-models:/models               # Whisper, bge-m3 (~5 GB, downloaded once)
+    ports:
+      - '127.0.0.1:2284:2284'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - database
+      - immich-machine-learning
+      - immich-server
+    restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:2284/health', timeout=5)"]
+      interval: 30s
+      start_period: 120s
+
+volumes:
+  vsearch-models:
+    external: true
+    name: immich-vsearch-models

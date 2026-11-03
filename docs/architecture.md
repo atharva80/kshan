@@ -1,0 +1,334 @@
+# Architecture
+
+How `vsearch` works inside, and how it fits around Immich without forking it.
+
+- [Components](#components)
+- [The indexing pipeline](#the-indexing-pipeline)
+- [Data model](#data-model)
+- [Writing back into Immich](#writing-back-into-immich)
+- [Keeping results in place (reconcile)](#keeping-results-in-place-reconcile)
+- [Scene-balanced pooling](#scene-balanced-pooling)
+- [The search side](#the-search-side)
+- [Web app, auth and playback](#web-app-auth-and-playback)
+- [Safety rails](#safety-rails)
+- [Code map](#code-map)
+
+## Components
+
+```mermaid
+flowchart TB
+    subgraph stack["Docker Compose project: immich"]
+        server["immich-server<br/>(API, web, jobs)"]
+        ml["immich-machine-learning (CUDA)<br/>/predict: CLIP, OCR, faces"]
+        pg[("postgres<br/>public.* = Immich<br/>vsearch.* = ours")]
+        redis[(valkey)]
+        vs["vsearch<br/>indexer thread + FastAPI"]
+    end
+    lib[/"UPLOAD_LOCATION<br/>(media files)"/]
+    state[/"/srv/immich/vsearch<br/>frame thumbnails"/]
+    models[/"volume immich-vsearch-models<br/>Whisper, bge-m3"/]
+
+    server --> pg & redis & ml
+    server --- lib
+    vs -- "read-only" --- lib
+    vs --- state & models
+    vs -- "SQL" --> pg
+    vs -- "HTTP /predict" --> ml
+    vs -- "HTTP /api (user's own token)" --> server
+```
+
+`vsearch` is one Python process with two parts:
+
+| Part | Runs in | Does |
+|---|---|---|
+| **Indexer** | a background thread | polls Postgres every 30 s, indexes new videos, repairs anything Immich overwrote |
+| **Web app** | uvicorn (FastAPI) | serves the search page and its API on port 2284 |
+
+It talks to three things:
+- **Postgres**, directly, as the same DB user Immich uses (credentials come from Immich's `.env`).
+- **Immich's ML container** at `/predict`, for CLIP vectors and OCR. It loads no vision model of its own.
+- **The Immich API**, only on behalf of a logged-in user: validating their session, streaming
+  video, creating albums.
+
+It mounts the media library **read-only**. It never modifies, moves or re-encodes a file.
+
+## The indexing pipeline
+
+```mermaid
+sequenceDiagram
+    participant I as Indexer
+    participant DB as Postgres
+    participant F as ffmpeg
+    participant ML as Immich ML
+    participant W as Whisper large-v3
+    participant E as bge-m3
+    loop every 30 s
+        I->>DB: schema check, read Immich config (CLIP model, OCR settings)
+        I->>DB: reconcile (restore anything Immich overwrote)
+        I->>DB: pending videos
+    end
+    I->>F: probe, then sample frames (scene changes, ≥ every 3 s)
+    loop each frame (3 in parallel)
+        I->>ML: CLIP visual + OCR (one request)
+    end
+    I->>F: decode audio (16 kHz mono)
+    I->>W: transcribe (VAD, per-segment language)
+    alt speech is not English
+        I->>W: translate to English
+    end
+    I->>E: embed transcript + translation segments
+    I->>DB: one transaction: our rows + Immich's smart_search, ocr_search, description
+```
+
+### 1. Which videos
+
+`db.pending_videos()` selects videos that:
+- are `type = 'VIDEO'`, not deleted, not offline, and visible in the timeline or archive.
+  That skips hidden live-photo clips and the locked folder.
+- have `asset_job_status."metadataExtractedAt"` set. Immich's metadata pass writes the
+  description from the file, so writing ours earlier would get overwritten.
+- were uploaded at least `VSEARCH_SETTLE_SECONDS` (60 s) ago, so the storage-template move has
+  happened and the file path is final.
+- and are new, from an older pipeline version, indexed with a different CLIP model, or failed
+  fewer than 3 times (with backoff: 10 min × attempts).
+
+### 2. Frame sampling (`media.sample_frames`)
+
+A single ffmpeg pass with a `select` filter:
+
+```
+isnan(prev_selected_t)                                  first frame
++ gte(t - prev_selected_t, max_gap)                     at least every max_gap seconds
++ gt(scene, 0.3) * gte(t - prev_selected_t, min_gap)    on scene changes, not too close together
+```
+
+- `max_gap = max(3 s, duration / 300)` and `min_gap = max(1 s, max_gap / 3)`, so long videos
+  never exceed ~300 frames.
+- Videos longer than 10 minutes decode **keyframes only** (`-skip_frame nokey`). Scene
+  detection would mean decoding every frame of a two-hour file.
+- Frames are scaled so the long edge is ≤ 960 px. That's plenty for SigLIP2 (384 px) and
+  OCR (736 px).
+- Timestamps come from the `showinfo` filter and are stored as integer milliseconds.
+
+### 3. Vision and OCR through Immich's ML
+
+Each frame goes to `POST /predict` with:
+
+```json
+{"clip": {"visual": {"modelName": "<Immich's current CLIP model>"}},
+ "ocr":  {"detection":   {"modelName": "PP-OCRv5_mobile", "options": {"minScore": 0.5, "maxResolution": 736}},
+          "recognition": {"modelName": "PP-OCRv5_mobile", "options": {"minScore": 0.8}}}}
+```
+
+The model names and thresholds are read from Immich's own `system-config`, so they always
+match what Immich uses for photos. When Immich switches CLIP models, every video's visuals are
+redone automatically. Transcripts are kept, because they don't depend on the vision model.
+
+### 4. Speech (`speech.py`)
+
+- Audio is decoded by ffmpeg to 16 kHz mono float32. faster-whisper's own PyAV-based decoding
+  breaks on current PyAV releases.
+- Whisper large-v3 runs on CUDA as `int8_float16` (~1.8 GB VRAM), with these settings:
+  - VAD on, so silence and music aren't transcribed
+  - `multilingual=True` (per-segment language detection, for Hinglish and mixed speakers)
+  - `condition_on_previous_text=False` (so one hallucination doesn't cascade)
+- Hallucination filter: segments are dropped when they have no letters or digits, a high
+  no-speech probability with low confidence, a repetition loop (compression ratio > 2.6), or
+  are classic phantom phrases ("thank you for watching") with low confidence.
+- **Translation pass:** if the detected language isn't English, or the text contains non-ASCII
+  letters, a second decode runs with `task="translate"`. Its segments are stored with
+  `translated = true`.
+- The model loads lazily, unloads after 5 idle minutes to free VRAM, and falls back to CPU (int8)
+  if CUDA fails.
+
+### 5. Text embeddings (`textemb.py`)
+
+`BAAI/bge-m3` via sentence-transformers on CPU (8 threads), normalized 1024-dim vectors for
+every transcript and translation segment. The same model embeds search queries at query time.
+
+## Data model
+
+Everything lives in a `vsearch` schema inside Immich's own database. That means it can join
+against `public.asset`, Immich's nightly database dumps include it, and foreign keys clean it
+up when Immich deletes an asset.
+
+```mermaid
+erDiagram
+    asset ||--o| video : "indexed as"
+    asset ||--o{ frame : "sampled into"
+    asset ||--o{ segment : "speech in"
+    video {
+        uuid asset_id PK "FK public.asset ON DELETE CASCADE"
+        text status "done | failed"
+        int pipeline "PIPELINE_VERSION it was made with"
+        text clip_model "Immich model the frames were embedded with"
+        real duration
+        text language "Whisper's detected language"
+        int frame_count
+        int segment_count
+        vector pooled "scene-balanced video vector"
+        text ocr_text "our text, merged into Immich's ocr_search"
+        text desc_block "our block, merged into Immich's description"
+        text error
+        int attempts
+    }
+    frame {
+        uuid asset_id PK
+        int ms PK "timestamp"
+        vector embedding "vector(clip dim), HNSW cosine"
+        text ocr "trigram index"
+    }
+    segment {
+        uuid asset_id PK
+        bool translated PK "Whisper translation pass"
+        int start_ms PK
+        int end_ms
+        text text "trigram index"
+        vector embedding "vector(1024), HNSW cosine"
+    }
+    meta {
+        text key PK "frame_dim, text_dim, segment_schema"
+        jsonb value
+    }
+```
+
+- **`frame.embedding` has the CLIP model's dimension** (1152 for SigLIP2 SO400M). It's fixed
+  so it can carry an HNSW index. When the dimension changes, `ensure_schema` recreates the
+  table and marks the visuals for redoing.
+- **`segment` is versioned through `meta.segment_schema`**, and the speech is redone when it changes.
+- **Frame thumbnails** (360 px WebP) live on disk at `/state/frames/<asset_id>/<ms>.webp`.
+  Directories of deleted videos get removed on the next pass.
+
+## Writing back into Immich
+
+All of this happens in **one transaction** per video (`db.save_video`):
+
+| Immich table | What we write | Why it's safe |
+|---|---|---|
+| `smart_search` | `(assetId, pooled vector)`, upsert | Same model and dimension as Immich's own vectors; one row per asset, as Immich expects |
+| `ocr_search` | Immich's own text **+** our OCR text | Merged, never replaced. Our part is tracked in `video.ocr_text` so it can be swapped cleanly |
+| `asset_exif.description` | existing description **+** our block | Merged, never replaced. Our block is tracked in `video.desc_block`; a description she wrote herself stays |
+
+The description block looks like this:
+
+```
+🎙 चलो आज शाम को कुत्ते के साथ पार्क में घूमने चलते हैं
+🌐 Let's go to the park with the dog this evening.
+```
+
+`asset_exif` has an `updated_at()` trigger that bumps `updateId`, so **the mobile apps sync
+the new description** like any edit made in the UI.
+
+Immich's search then finds videos through its normal code paths:
+- smart search: cosine distance on `smart_search`
+- OCR search: `f_unaccent(ocr_search.text) %>> query` (strict word similarity)
+- description search: `ILIKE` on `asset_exif.description`
+
+## Keeping results in place (reconcile)
+
+Immich rewrites these tables on its own schedule. Re-running Smart Search writes back the
+thumbnail vector, re-running OCR writes back the thumbnail text, and "Refresh metadata" resets
+the description. Every pass, `db.reconcile()` checks and repairs:
+
+```sql
+-- vectors: put ours back wherever it differs
+insert into smart_search ("assetId", embedding)
+select v.asset_id, v.pooled from vsearch.video v
+where v.status = 'done' and v.clip_model = :current_model and vector_dims(v.pooled) = :dim
+on conflict ("assetId") do update set embedding = excluded.embedding
+where smart_search.embedding <> excluded.embedding;
+```
+
+OCR text and descriptions get the same treatment through `merge_ocr` and `merge_description`,
+wherever our part is missing. Repairs are logged as
+`restored what Immich overwrote: {'smart_search': 1, 'ocr': 1, 'description': 1}`.
+The end-to-end test overwrites all three and checks they come back within one pass.
+
+## Scene-balanced pooling
+
+Immich stores **one vector per asset**, so the video's frames have to collapse into one.
+A plain average fails on exactly the case this project exists for. In the test video the cat
+appears in 2 of 12 sampled frames, so the average is 83% lake and food. For "a cat", two dog
+videos then rank above it.
+
+So frames are first grouped into scenes, and each scene counts once:
+
+```python
+scenes = []
+for e in normalized(frame_embeddings):           # in time order
+    sims = [cos(scene_centroid, e) for scene in scenes]
+    if sims and max(sims) >= 0.82:
+        scenes[argmax(sims)] += e                # same scene (or a scene coming back)
+    else:
+        scenes.append(e)                         # new scene
+pooled = normalize(mean(normalize(s) for s in scenes))
+```
+
+The lake, food and cat now weigh one third each. In Immich's own smart search, the cat video
+moved from **#5 to #2** for "a cat", behind only an actual cat photo. Every other query kept its
+correct top result. The result held for thresholds 0.75–0.9; 0.82 sits in the middle.
+
+## The search side
+
+`search.run()` collects **moments** `(video, ms, kind, score, text)` from up to three sources,
+filtered to the requesting user's live, visible videos:
+
+| Kind | Query | Scoring |
+|---|---|---|
+| **visual** ("Seen") | query text → Immich ML CLIP text vector → HNSW over `frame.embedding` (`ef_search` 400, iterative scan) | keep frames ≥ max(0.07, best − 0.06), and within 0.03 of their video's best; scaled to 0.4–1.0 |
+| **speech** ("Said") | 1) `ILIKE` on transcript **and** translation → 1.0. 2) bge-m3 vector → HNSW over `segment.embedding` | meaning matches need ≥ 0.60 (≥ 0.65 for 1–2 word queries) and to be within 0.15 of the best; scaled to 0.4–0.85 so exact words outrank them |
+| **text** ("Written") | `ILIKE` on frame OCR, also with spaces removed ("GOA2023") → 1.0. Strict trigram similarity for misreads, only for queries of 5+ characters → 0.8 | |
+
+The thresholds come from measured data ([models.md](models.md#calibration)).
+
+**Fusion per video:** the score is the best kind's score plus 0.1 × each other kind's score, so
+a video that matches in several ways ranks higher. Moments of the same kind closer than 2.5 s
+collapse into one, and up to 6 moments are returned per video. Each moment gets the nearest
+sampled frame as its thumbnail.
+
+## Web app, auth and playback
+
+- **Where it lives:** Tailscale serve publishes Immich at `https://<host>:8443/` and this app at
+  `https://<host>:8443/vsearch`. Same origin, so the app receives Immich's
+  `immich_access_token` cookie. A small ASGI wrapper (`StripPrefix`) accepts paths with or
+  without `/vsearch`, and the page computes its base path in JS, so it works at both URLs.
+- **Auth:** every API call resolves to an Immich user by calling `GET /api/users/me` with the
+  caller's cookie, bearer token or `x-api-key` (cached for 2 min). The page has a login form
+  that posts to Immich's `/api/auth/login` and sets the same cookies Immich's web app does, so
+  logging in on either logs into both.
+- **Isolation:** search SQL filters by `ownerId`. Thumbnail, playback and album endpoints check
+  the asset belongs to the caller and return 404 otherwise.
+- **Playback:** `/api/play/{id}` proxies Immich's `/api/assets/{id}/video/playback` with the
+  user's own token and passes `Range` through, so Immich handles transcoded versions and
+  seeking (HTTP 206). The player seeks to the moment on `loadedmetadata`.
+- **Albums:** "Save these videos as an Immich album" calls Immich's `POST /api/albums` as the user.
+- Immich's web service worker only intercepts `/api/assets/*/original|thumbnail`, so it never
+  catches `/vsearch`.
+
+## Safety rails
+
+- **Schema check before every pass:** `db.REQUIRED` lists every Immich table and column touched.
+  If an Immich upgrade changes them, the indexer logs `Immich's database layout changed`,
+  reports `paused` in `/health`, and writes nothing.
+- **Immich's own schema check stays clean:** `immich-admin schema-check` reports
+  `No schema drift detected` with the `vsearch` schema present.
+- **Foreign keys** to `public.asset ... ON DELETE CASCADE`: deleting a video in Immich deletes its index.
+- **Read-only media mount,** and only videos are touched. Photos, live-photo clips, the locked
+  folder and trash are not.
+- **Failures are contained:** a broken file is marked `failed` with the error and retried
+  twice with backoff, and it never blocks other videos.
+
+## Code map
+
+| File | Responsibility |
+|---|---|
+| `vsearch/indexer.py` | the loop, per-video orchestration, thumbnail housekeeping |
+| `vsearch/media.py` | ffprobe, scene sampling, thumbnails |
+| `vsearch/mlclient.py` | Immich ML `/predict` client (CLIP visual/text, OCR) |
+| `vsearch/speech.py` | ffmpeg audio decode, Whisper transcribe + translate, hallucination filter, VRAM lifecycle |
+| `vsearch/textemb.py` | bge-m3 |
+| `vsearch/db.py` | schema, Immich config/schema checks, pooling, save + merge + reconcile |
+| `vsearch/search.py` | the three moment sources, thresholds, fusion |
+| `vsearch/web.py` | FastAPI routes, auth, prefix handling, playback proxy |
+| `vsearch/static/index.html` | the whole page (vanilla JS, mobile-first, light/dark) |
+| `vsearch/config.py` | every setting, from environment variables |

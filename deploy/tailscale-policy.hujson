@@ -1,0 +1,25 @@
+// Tailscale access policy for sharing ONLY Immich with someone outside your tailnet.
+//
+// Machine sharing (Machines > your server > Share) lets another person reach that machine
+// from their own Tailscale account. With the default allow-all rule they could reach every
+// port on it (SSH, remote desktop, dev servers...). This replaces that rule so that:
+//   - you and your own devices keep full access, as before
+//   - people you've shared a machine with can only reach Immich on the server
+//
+// Paste over the "grants" section in Admin console > Access controls > JSON editor.
+// Replace the two addresses with your server's (`tailscale ip` prints both).
+{
+	"grants": [
+		// You and your own devices: everything, same as before.
+		{"src": ["autogroup:member"], "dst": ["*"], "ip": ["*"]},
+
+		// People you've shared a machine with: only Immich (port 8443) on the server.
+		{
+			"src": ["autogroup:shared"],
+			"dst": ["100.x.y.z", "fd7a:115c:a1e0::xxxx:xxxx"],
+			"ip":  ["tcp:8443"],
+		},
+	],
+
+	// Keep the rest of your existing policy (ssh, nodeAttrs, ...) as it is.
+}

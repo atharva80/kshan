@@ -1,0 +1,82 @@
+# Throwaway Immich for end-to-end tests, fully separate from the real one (own database,
+# own library volume). It borrows the real stack's GPU ML container over its network.
+#   docker compose -f docker-compose.vtest.yml up -d            # Immich only
+#   docker compose -f docker-compose.vtest.yml --profile indexer up -d
+#   docker compose -f docker-compose.vtest.yml --profile indexer down -v   # wipe it all
+name: immich-vtest
+
+x-db: &db
+  DB_HOSTNAME: vtest-database
+  DB_USERNAME: postgres
+  DB_PASSWORD: vtestonly
+  DB_DATABASE_NAME: immich
+
+services:
+  vtest-server:
+    image: ghcr.io/immich-app/immich-server:v3
+    environment:
+      <<: *db
+      REDIS_HOSTNAME: vtest-redis
+      TZ: Asia/Kolkata
+    volumes:
+      - vtest-library:/data
+    ports:
+      - '127.0.0.1:2293:2283'
+    depends_on: [vtest-redis, vtest-database]
+    restart: unless-stopped
+    networks: [default, immich]
+
+  vtest-redis:
+    image: docker.io/valkey/valkey:9@sha256:c123e3715db63d06d4ad6964884037aa0d5d4d703939b9929954112889708e1d
+
+  vtest-database:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
+    environment:
+      POSTGRES_PASSWORD: vtestonly
+      POSTGRES_USER: postgres
+      POSTGRES_DB: immich
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+    volumes:
+      - vtest-pgdata:/var/lib/postgresql/data
+    shm_size: 128mb
+
+  vtest-vsearch:
+    image: immich-vsearch:local
+    profiles: [indexer]
+    environment:
+      <<: *db
+      VSEARCH_ML_URL: http://immich-machine-learning:3003
+      VSEARCH_IMMICH_URL: http://vtest-server:2283
+      VSEARCH_IMMICH_PUBLIC_URL: http://127.0.0.1:2293
+      VSEARCH_SETTLE_SECONDS: '5'
+      VSEARCH_POLL_SECONDS: '10'
+      HF_HUB_DISABLE_XET: '1'
+    volumes:
+      - vtest-library:/data:ro
+      - vtest-state:/state
+      - vsearch-models:/models
+    ports:
+      - '127.0.0.1:2294:2284'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on: [vtest-server]
+    restart: unless-stopped
+    networks: [default, immich]
+
+networks:
+  immich:
+    external: true
+    name: immich_default
+
+volumes:
+  vtest-library:
+  vtest-pgdata:
+  vtest-state:
+  vsearch-models:
+    external: true
+    name: immich-vsearch-models

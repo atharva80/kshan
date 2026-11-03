@@ -1,0 +1,181 @@
+# Decisions
+
+The forks in the road, in the order they came up. Each entry gives what was considered, what
+was picked, and why.
+
+---
+
+### 1. Where the library lives: on the devices, or on a server?
+
+**Options:** organize on the phone/iPad · a server the devices talk to.
+
+**Picked:** a server.
+
+**Why:** the actual problem is **storage**. Both devices were nearly full, and a 9th-gen iPad
+has 3 GB of RAM. Even a perfect on-device classifier leaves the library with nowhere to live.
+A server holds everything, and the phone only streams thumbnails.
+
+### 2. What runs the library
+
+**Options:** Immich · PhotoPrism · LibrePhotos · Ente (self-hosted) · a custom app.
+
+**Picked:** Immich.
+
+**Why:**
+- Native iOS and Android apps with **automatic backup** (which frees the devices).
+- A timeline, faces and CLIP smart search, plus **exact-duplicate skipping by checksum**, which
+  matters when the same photo sits on three pendrives.
+- Very active development.
+
+It falls short only on videos (one frame, no audio), and that gap is what this project fills.
+
+### 3. Which machine hosts it
+
+**Options:** a free cloud VPS · a spare laptop · the main laptop with the GPU.
+
+**Picked:** the main laptop, which has the RTX 2000 Ada.
+
+**Why:**
+- The GPU makes Whisper large-v3 and SigLIP2 practical.
+- Pendrive-scale libraries (≤ 200 GB) don't fit a 100 GB free VPS.
+- Private family photos are better off on hardware you own.
+
+**Cost:** the machine has to stay awake for remote access.
+
+### 4. How someone 700 km away reaches it
+
+| Option | Problem |
+|---|---|
+| Port forwarding + DuckDNS | Indian ISPs often use carrier-grade NAT; needs router access; exposes the home IP; laptop must stay home |
+| Cloudflare Tunnel | free plan caps request bodies at **100 MB**, so phone videos fail to upload |
+| Tailscale Funnel | puts Immich on the **public internet** |
+| Public reverse proxy on a VPS | same exposure, plus a server to run |
+| Sharing the owner's Tailscale login | no |
+| **Tailscale machine sharing** | ✅ |
+
+**Picked:** Tailscale machine sharing.
+
+**Why:**
+- She uses her own free account.
+- She sees only that one machine, and access can be revoked any time.
+- It works through any NAT.
+- Immich gets a valid HTTPS certificate via `tailscale serve`.
+
+**Catch, found and fixed:** under the default allow-all policy, a shared user can reach *every
+port* on the machine. A two-rule grant limits shared users to Immich's port
+([`deploy/tailscale-policy.hujson`](../deploy/tailscale-policy.hujson)).
+
+### 5. Storage layout
+
+**Picked:** a dedicated btrfs subvolume `/srv/immich`, with the Postgres directory set to `chattr +C` (NOCOW).
+
+**Why:**
+- The subvolume can be snapshotted and sent as one unit, and stays out of system snapshots.
+- Copy-on-write fragments database files badly, so Postgres is NOCOW.
+- The media keeps CoW and checksums, so `btrfs scrub` detects silent corruption in a photo archive.
+
+### 6. How to add video search: fork Immich, use its API, or work beside it
+
+**Options:**
+- Fork Immich: heavy, and it diverges.
+- Push results through Immich's public API: there's no API to add vectors or OCR text to an asset.
+- A sidecar that **writes into Immich's search tables** and keeps its own data next to them.
+
+**Picked:** the sidecar.
+
+**Why:** it's the only way the *regular Immich app* gets better without changing Immich.
+
+**Guarded by:**
+- a schema check before every pass (pause, never guess)
+- merging instead of replacing (her own descriptions and Immich's OCR text survive)
+- foreign keys with cascade
+- reconcile, which re-applies results if Immich overwrites them
+
+### 7. Where frame embeddings come from
+
+**Options:** load our own CLIP in vsearch · call **Immich's ML container**.
+
+**Picked:** Immich's ML.
+
+**Why:**
+- The vectors are identical in model and preprocessing, so video frames and photos rank on
+  the same scale.
+- No second copy of a 4 GB model in VRAM.
+- Changing the model in Immich's settings carries over automatically.
+
+### 8. The vision model
+
+**Picked:** `ViT-SO400M-16-SigLIP2-384__webli`.
+
+**Why:**
+- Best English recall in Immich's benchmark (85.99%).
+- Immich recommends SigLIP2/XLM for mixed-language queries.
+- NLLB is far better on Hindi, but it expects one fixed query language and is weaker in English.
+
+Details in [models.md](models.md).
+
+### 9. Whisper large-v3 vs turbo
+
+**Picked:** large-v3, `int8_float16`.
+
+**Why:** with a GPU available, accuracy on **Marathi and Hindi** is worth more than turbo's speed,
+since turbo's 4-layer decoder loses the most on lower-resource languages. int8 weights keep it
+at ~1.8 GB VRAM. It also translates, which turbo isn't tuned for.
+
+### 10. Searching Indian-language speech from English
+
+**Options:**
+- Multilingual embeddings only.
+- Transliterate Devanagari to Latin.
+- Hinglish-specific Whisper fine-tunes.
+- **A Whisper translation pass.**
+
+**Picked:** embeddings (bge-m3) **plus** a translation pass for non-English speech.
+
+**Why:**
+- Measured, embeddings alone couldn't separate "Goa" vs the Marathi Goa sentence (0.401, a
+  true match) from "a cat" vs the Hindi dog sentence (0.576, false).
+- Transliteration produces spellings nobody types ("govyaalaa").
+- Hinglish fine-tunes hurt Marathi and English.
+- The translation makes English words exact matches. In the Immich description it also makes
+  the regular app find these videos.
+
+### 11. One vector per video
+
+**Options:** first frame (Immich's way) · mean of frames · **scene-balanced mean**.
+
+**Picked:** scene-balanced.
+
+**Why:** a plain mean let 10 seconds of lake drown out a 6-second cat, and the cat video ranked
+#4 of 5 for "a cat". Counting each scene once ranked it #2, behind only an actual cat photo,
+with no other query getting worse. It held across thresholds 0.75–0.9
+([architecture](architecture.md#scene-balanced-pooling)).
+
+### 12. Where the search page lives and how it logs in
+
+**Picked:** the same origin as Immich (`/vsearch` via `tailscale serve`), authenticated
+**by Immich itself**.
+
+**Why:**
+- It sees Immich's session cookie, and its own login form sets the same cookies, so one
+  account and one login cover both.
+- No new user database, no new secrets.
+- Per-user isolation comes for free (`ownerId`).
+- Video playback goes through Immich's own endpoint with the user's token, so transcodes and
+  seeking just work.
+
+### 13. bge-m3 on CPU
+
+**Why:** 8 GB of VRAM is better spent on SigLIP2 and Whisper. bge-m3 on CPU embeds a query in
+~100 ms and a clip's segments in well under a second, and it stays loaded for search.
+
+### 14. How to test
+
+**Picked:** a throwaway Immich (own database and volumes) fed with generated videos whose
+contents are known per second. 41 automated checks cover the page, Immich's own search,
+precision, cross-language speech and resilience.
+
+**Why:** "it indexed without errors" proves nothing about search quality. Known ground truth
+does, and it caught six real bugs ([testing.md](testing.md#bugs-testing-caught-and-how-they-were-fixed)).
+Test photos come from Wikimedia Commons with attribution and are downloaded on demand, never
+committed.
