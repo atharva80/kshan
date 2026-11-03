@@ -1,10 +1,22 @@
 {
-  "name": "Video Search",
-  "short_name": "Video Search",
-  "start_url": "./",
-  "scope": "./",
+  "id": "/vsearch/",
+  "name": "Immich Video Search & Pendrives",
+  "short_name": "Pendrives",
+  "description": "Upload pendrives to Immich and find moments inside videos.",
+  "start_url": "/vsearch/#pendrives",
+  "scope": "/vsearch/",
   "display": "standalone",
-  "background_color": "#101217",
+  "orientation": "portrait",
+  "background_color": "#000000",
   "theme_color": "#4250af",
-  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+  "icons": [
+    { "src": "/vsearch/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/vsearch/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/vsearch/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "Upload a pendrive", "url": "/vsearch/#pendrives" },
+    { "name": "Find in videos", "url": "/vsearch/" },
+    { "name": "Stats", "url": "/vsearch/#stats" }
+  ]
 }

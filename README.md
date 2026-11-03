@@ -98,7 +98,10 @@ flowchart LR
      fingerprinted *in the browser* (SHA-1, the checksum Immich uses), and files Immich already
      has are skipped. Everything lands in the album `Pendrive - <name>`. The screen stays on,
      failures retry, and dates come from WhatsApp/camera filenames. A list shows every pendrive
-     and its status. Stop and re-pick at any time: nothing uploads twice.
+     and its status. Stop and re-pick at any time: nothing uploads twice, and files done in an earlier
+     run are recognized instantly from the phone's memory without being read again.
+   - **Stats:** library totals, uploads per day, pendrives, video-search progress and languages, server space.
+   - **Installable** as an app ("Install app" / Add to Home screen): its own icon, full-screen.
 10. **It keeps its results in place.** If Immich re-runs a job and overwrites a video's entries,
    the next pass (30 s later) puts them back.
 

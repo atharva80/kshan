@@ -29,6 +29,22 @@ Then:
 
 ## 3. Upload pendrives (phone browser)
 
+### Install it as an app (once)
+Open `https://YOUR-SERVER:8443/vsearch/` in **Chrome**. Then either tap **Install app** at the top,
+or use Chrome's **⋮ → Add to Home screen / Install app**. It gets its own icon (a pendrive with a
+play button) and opens full-screen with no tabs, so it can't be closed by accident.
+
+### Overnight checklist
+A phone browser can't upload while it's in the background. Android pauses any page that isn't
+on screen, installed or not. So for long runs:
+1. **Phone on charge**, on **Wi-Fi**, with **Tailscale on**.
+2. **Leave the app open and on screen.** It keeps the screen awake by itself. Don't switch apps.
+3. Optional, makes Android less aggressive: Settings → Apps → **Chrome → Battery → Unrestricted**.
+4. **If it gets interrupted anyway** (a call, a reboot, the app closed): open it and pick the
+   same files again. Files already done are recognised **instantly from the phone's memory**,
+   without reading them again, and only the rest upload.
+
+
 The Immich app backs up the phone's own gallery but can't open a pendrive, so pendrives go
 through the **Pendrives** page.
 
@@ -110,13 +126,23 @@ Everything is in Immich now, so sorting happens there (app or web):
 > **Don't delete originals** from the phone or pendrives until whoever runs the server says
 > there's a backup.
 
-## 7. If something doesn't work
+## 7. Stats
+
+The **Stats** tab shows:
+- your library: photos, videos, total size
+- uploads per day
+- every pendrive and its album count
+- video search progress (how many are searchable, languages heard)
+- free space on the server
+
+## 8. If something doesn't work
 
 | What you see | Try |
 |---|---|
 | Can't reach the server | Is Tailscale on? Is the server computer on? |
 | The page asks you to log in | Log in with your Immich email and password |
 | Upload shows "Can't reach the server… retrying" | It waits and continues by itself. Check Tailscale/Wi-Fi |
-| Upload stopped | Open the page, pick the same files again: done ones are skipped |
+| Upload stopped | Open the app, pick the same files again: done ones are skipped instantly |
+| "Pendrive not readable" | The pendrive came loose or Android lost access. Plug it back in and pick the files again |
 | A brand-new video isn't found by what's said in it | Give it a few minutes to be processed |
 | The picker doesn't show the pendrive | Unplug and replug it. Some phones need *USB file transfer* turned on in the notification |

@@ -402,6 +402,27 @@ happens in the browser, talking to Immich's own API on the same origin:
 Because skipping is by content checksum, **stopping and re-picking the same files is always
 safe**. That's the resume mechanism.
 
+**Built to survive a night on a phone:**
+- **Time limits:** every request has one (API 60 s; an upload gets max(10 min, size at 30 KB/s)),
+  so a silently dead connection can't hang the run.
+- **Duplicate checks retry:** they wait for the server to come back instead of aborting.
+  Whatever fails, the upload workers always stop, and progress reporting stops with them.
+- **Unreadable files:** a file that can't be read is marked failed and the run continues. Five
+  unreadable files in a row means the pendrive came loose, so the run stops with a clear
+  message instead of failing every file.
+- **Album adds retry:** if one still fails, re-picking the files adds them later. A file is
+  never uploaded but silently missing from its album.
+- **Album ownership:** only her own album with that name is reused, never an album someone shared with her.
+- **Instant resume:** each file's fingerprint (keyed by name + size + date) is kept in the
+  phone's IndexedDB. After the app is killed, re-picking the same files reads **0 bytes** from
+  the pendrive. Immich still confirms which ones it has, so deleting something in Immich
+  re-uploads it.
+- **Installable app:** manifest, PNG icons and a pass-through service worker scoped to
+  `/vsearch/`. No caching, and Immich's pages are never touched.
+
+**What it can't do:** run in the background. Android freezes pages that aren't on screen, so
+long runs need the app open, the screen on (it holds a wake lock) and the phone charging.
+
 ## Web app, auth and playback
 
 - **Where it lives:** Tailscale serve publishes Immich at `https://<host>:8443/` and this app at

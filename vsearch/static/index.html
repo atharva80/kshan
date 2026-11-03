@@ -119,6 +119,16 @@
   .badge.done { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
   .badge.progress { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
   .badge.failed { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; margin-top: 10px; }
+  .bars .b { flex: 1; max-width: 26px; background: var(--primary); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
+  .bars .b:hover::after { content: attr(data-tip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); font-size: .72rem; padding: 3px 6px; border-radius: 6px; white-space: nowrap; }
+  .meter { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; margin: 6px 0; }
+  .meter > div { height: 100%; background: var(--primary); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: .9rem; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  #install { margin-left: auto; padding: 7px 14px; font-size: .85rem; }
+  #install:not(.hidden) + .who { margin-left: 10px; }
   ol.steps { margin: 0; padding-left: 20px; font-size: .9rem; } ol.steps li { margin: 4px 0; }
 
   .login { max-width: 400px; margin: 48px auto; display: grid; gap: 10px; }
@@ -133,11 +143,13 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
       <span class="brand">Immich</span>
     </a>
+    <button class="pill hidden" id="install" type="button">Install app</button>
     <span class="who" id="who"></span>
   </div>
   <nav class="tabs hidden" id="tabs" role="tablist">
     <button class="tab" role="tab" data-tab="search" aria-selected="true">Find in videos</button>
     <button class="tab" role="tab" data-tab="pendrives" aria-selected="false">Pendrives</button>
+    <button class="tab" role="tab" data-tab="stats" aria-selected="false">Stats</button>
   </nav>
 </header>
 
@@ -225,7 +237,16 @@
       </ol>
     </div>
   </section>
+  <section id="tab-stats" class="hidden">
+  <div class="stats" id="st-top"></div>
+  <div class="card"><h2>Uploaded per day (last 30 days)</h2><div id="st-days" class="bars"></div></div>
+  <div class="card"><h2>Pendrives</h2><div class="drives" id="st-drives"></div></div>
+  <div class="card"><h2>Video search</h2><div id="st-videos"></div></div>
+  <div class="card"><h2>Server</h2><div id="st-server"></div></div>
+</section>
 </main>
+
+
 
 <dialog id="player">
   <video id="video" controls playsinline preload="metadata"></video>
@@ -247,10 +268,14 @@ const base = location.pathname.endsWith('/') ? location.pathname : location.path
 if (!location.pathname.endsWith('/')) history.replaceState(null, '', base + location.search + location.hash);
 const $ = (id) => document.getElementById(id);
 const ours = (path, opts = {}) => fetch(base + 'api/' + path, { credentials: 'same-origin', ...opts });
-const immich = (path, opts = {}) => fetch('/api/' + path, { credentials: 'same-origin', ...opts });
+const immich = (path, opts = {}, ms = 60000) => {
+  // Every call gets a time limit: a silently stalled connection must never hang a run.
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms);
+  return fetch('/api/' + path, { credentials: 'same-origin', signal: ctl.signal, ...opts }).finally(() => clearTimeout(timer));
+};
 const json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const LABEL = { visual: 'Seen', speech: 'Said', text: 'Written' };
-let immichUrl = '', kind = 'all', lastResults = [], lastQuery = '';
+let immichUrl = '', myId = '', kind = 'all', lastResults = [], lastQuery = '';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clock = (ms) => {
@@ -267,16 +292,17 @@ async function start() {
   if (res.status === 401) return showLogin();
   const me = await res.json();
   immichUrl = me.immichUrl || '';
+  myId = me.id || '';
   $('back').href = (immichUrl || '') + '/';
   $('who').textContent = me.name || '';
   $('login').classList.add('hidden');
   $('tabs').classList.remove('hidden');
-  showTab(location.hash === '#pendrives' ? 'pendrives' : 'search');
+  showTab(['#pendrives', '#stats'].includes(location.hash) ? location.hash.slice(1) : 'search');
   refreshStatus();
   loadDrives();
 }
 function showLogin() {
-  for (const id of ['tabs', 'tab-search', 'tab-pendrives']) $(id).classList.add('hidden');
+  for (const id of ['tabs', 'tab-search', 'tab-pendrives', 'tab-stats']) $(id).classList.add('hidden');
   $('login').classList.remove('hidden');
   $('email').focus();
 }
@@ -292,7 +318,9 @@ function showTab(name) {
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
   $('tab-search').classList.toggle('hidden', name !== 'search');
   $('tab-pendrives').classList.toggle('hidden', name !== 'pendrives');
-  history.replaceState(null, '', base + (name === 'pendrives' ? '#pendrives' : ''));
+  $('tab-stats').classList.toggle('hidden', name !== 'stats');
+  history.replaceState(null, '', base + (name === 'search' ? '' : '#' + name));
+  if (name === 'stats') loadStats();
   if (name === 'search') $('q').focus();
 }
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
@@ -375,6 +403,35 @@ $('album').addEventListener('click', async () => {
 });
 
 // ---------- pendrives ----------
+// Remembers, on this phone, each file's checksum and Immich id (keyed by name + size + date),
+// so resuming after the app was killed skips finished files without reading them again.
+const memo = (() => {
+  let dbp = null;
+  const open = () => dbp ??= new Promise((resolve) => {
+    try {
+      const req = indexedDB.open('vsearch-pendrives', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('files');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch { resolve(null); }
+  });
+  const key = (f) => `${f.name}|${f.size}|${f.lastModified}`;
+  const tx = async (mode, fn) => {
+    const db = await open();
+    if (!db) return undefined;
+    return new Promise((resolve) => {
+      try {
+        const t = db.transaction('files', mode), req = fn(t.objectStore('files'));
+        t.oncomplete = () => resolve(req?.result); t.onerror = () => resolve(undefined);
+      } catch { resolve(undefined); }
+    });
+  };
+  return {
+    get: (f) => tx('readonly', (s) => s.get(key(f))),
+    put: (f, value) => tx('readwrite', (s) => s.put(value, key(f))),
+  };
+})();
+
 let picked = [], run = null, wakeLock = null;
 const folderInput = $('folder');
 if ('webkitdirectory' in folderInput && !/iPhone|iPad|iPod/.test(navigator.userAgent)) $('pick-folder').classList.remove('hidden');
@@ -405,7 +462,7 @@ async function ensureAlbum(name) {
   const albumName = `Pendrive - ${name}`;
   const list = await immich('albums');
   if (list.status === 401) throw new Error('login');
-  const found = (await list.json()).find((a) => a.albumName === albumName);
+  const found = (await list.json()).find((a) => a.albumName === albumName && (!myId || a.ownerId === myId));
   if (found) return found.id;
   const res = await immich('albums', json({ albumName, description: `Everything uploaded from the pendrive "${name}".` }));
   if (!res.ok) throw new Error(`could not create the album (${res.status})`);
@@ -443,6 +500,9 @@ function uploadOne(file) {
       else { run.bytesDone -= last; reject(Object.assign(new Error(`HTTP ${xhr.status}`), { status: xhr.status })); }
     };
     xhr.onerror = () => { run.bytesDone -= last; reject(new Error('network')); };
+    // Allow slow links (~30 KB/s) but never wait forever on a dead one.
+    xhr.timeout = Math.max(10 * 60000, (file.size / 30000) * 1000);
+    xhr.ontimeout = () => { run.bytesDone -= last; reject(new Error('timed out')); };
     run.xhrs.add(xhr);
     xhr.onloadend = () => run.xhrs.delete(xhr);
     xhr.send(form);
@@ -464,7 +524,16 @@ async function uploadWithRetry(item) {
 
 async function addToAlbum(ids) {
   for (let i = 0; i < ids.length; i += 200) {
-    await immich(`albums/${run.albumId}/assets`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids.slice(i, i + 200) }) });
+    const chunk = ids.slice(i, i + 200);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await immich(`albums/${run.albumId}/assets`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: chunk }) });
+        if (res.ok) break;
+        if (res.status === 401) throw Object.assign(new Error('login'), { status: 401 });
+      } catch (e) { if (e.status === 401) throw e; }
+      if (attempt >= 6) { run.albumMisses += chunk.length; break; }  // re-picking the files adds them later
+      await waitOnline(); await sleep(5000 * (attempt + 1));
+    }
   }
 }
 
@@ -472,7 +541,7 @@ async function startRun(items) {
   const name = $('pd-name').value.trim().split(/\s+/).join(' ');
   if (!name) { $('pd-name').focus(); $('pd-name').placeholder = 'Give this pendrive a name first'; return; }
   run = { name, items, active: true, up: 0, skip: 0, fail: 0, bytesTotal: items.reduce((s, i) => s + i.file.size, 0),
-          bytesDone: 0, hashBytes: 0, started: Date.now(), xhrs: new Set(), pendingAlbum: [], failed: [] };
+          bytesDone: 0, hashBytes: 0, started: Date.now(), xhrs: new Set(), pendingAlbum: [], failed: [], albumMisses: 0 };
   $('run-card').classList.remove('hidden'); $('upload-card').classList.add('hidden');
   $('retry').classList.add('hidden'); $('open-album').classList.add('hidden'); $('stop').classList.remove('hidden');
   $('run-tip').classList.remove('hidden');
@@ -487,28 +556,51 @@ async function startRun(items) {
     let hashing = true;
     // Fingerprint in batches, ask Immich which it already has, upload the rest (2 at a time).
     const hasher = (async () => {
-      for (let i = 0; i < items.length && run.active; i += 20) {
-        const batch = items.slice(i, i + 20);
-        for (const item of batch) {
-          if (!run.active) break;
-          setNow(`Checking ${item.file.name}`);
-          item.checksum = await sha1File(item.file, (n) => { run.hashBytes += n; });
+      try {
+        let unreadableInARow = 0;
+        for (let i = 0; i < items.length && run.active; i += 20) {
+          const batch = items.slice(i, i + 20);
+          for (const item of batch) {
+            if (!run.active) break;
+            // Seen in an earlier run on this phone: reuse its fingerprint instead of reading the
+            // whole file again (Immich still confirms it has it, in case it was deleted there).
+            const known = await memo.get(item.file);
+            if (known?.checksum) { item.checksum = known.checksum; continue; }
+            setNow(`Checking ${item.file.name}`);
+            try {
+              item.checksum = await sha1File(item.file, (n) => { run.hashBytes += n; });
+              memo.put(item.file, { checksum: item.checksum });
+              unreadableInARow = 0;
+            } catch (e) {
+              item.error = 'could not read the file'; run.fail++; run.failed.push(item); run.bytesDone += item.file.size;
+              if (++unreadableInARow >= 5) {  // pendrive unplugged or access lost
+                setNow('Can\'t read the pendrive any more. Plug it back in, then pick the files again.');
+                run.active = false; run.lostDrive = true; break;
+              }
+            }
+          }
+          const check = batch.map((x, j) => ({ id: String(i + j), checksum: x.checksum })).filter((x) => x.checksum);
+          if (!check.length) { paint(); continue; }
+          let results = null;
+          for (let attempt = 0; !results && run.active; attempt++) {
+            try {
+              const res = await immich('assets/bulk-upload-check', json({ assets: check }));
+              if (res.status === 401) throw Object.assign(new Error('login'), { status: 401 });
+              if (res.ok) results = (await res.json()).results || [];
+            } catch (e) { if (e.status === 401) throw e; }
+            if (!results) { await waitOnline(); await sleep(Math.min(60000, 3000 * (attempt + 1))); }
+          }
+          for (const r of results || []) {
+            const item = items[+r.id];
+            if (r.action === 'reject' && r.assetId) { item.assetId = r.assetId; run.skip++; run.bytesDone += item.file.size; run.pendingAlbum.push(r.assetId); memo.put(item.file, { checksum: item.checksum, assetId: r.assetId }); }
+            else if (r.action === 'reject') { run.fail++; item.error = r.reason || 'rejected'; run.failed.push(item); }
+            else queue.push(item);
+          }
+          paint();
         }
-        await waitOnline();
-        const check = batch.map((x, j) => ({ id: String(i + j), checksum: x.checksum })).filter((x) => x.checksum);
-        if (!check.length) continue;
-        const res = await immich('assets/bulk-upload-check', json({ assets: check }));
-        if (res.status === 401) throw Object.assign(new Error('login'), { status: 401 });
-        const results = (await res.json()).results || [];
-        for (const r of results) {
-          const item = items[+r.id];
-          if (r.action === 'reject' && r.assetId) { item.assetId = r.assetId; run.skip++; run.bytesDone += item.file.size; run.pendingAlbum.push(r.assetId); }
-          else if (r.action === 'reject') { run.fail++; item.error = r.reason || 'rejected'; run.failed.push(item); }
-          else queue.push(item);
-        }
-        paint();
+      } finally {
+        hashing = false;  // always lets the upload workers finish
       }
-      hashing = false;
     })();
     const worker = async () => {
       while (run.active && (hashing || queue.length)) {
@@ -520,6 +612,7 @@ async function startRun(items) {
           item.assetId = res.id;
           res.status === 'duplicate' ? run.skip++ : run.up++;
           run.pendingAlbum.push(res.id);
+          memo.put(item.file, { checksum: item.checksum, assetId: res.id });
         } catch (e) {
           if (e.status === 401) { run.active = false; showLogin(); return; }
           if (!run.active) return;
@@ -530,11 +623,15 @@ async function startRun(items) {
       }
     };
     const ticker = setInterval(() => report('in progress'), 10000);
-    await Promise.all([hasher, worker(), worker()]);
-    clearInterval(ticker);
+    try {
+      await Promise.all([hasher.catch((e) => { run.active = false; throw e; }), worker(), worker()]);
+    } finally {
+      clearInterval(ticker);
+    }
     await addToAlbum(run.pendingAlbum.splice(0));
-    await finish(run.active ? (run.fail ? 'done with errors' : 'done') : 'stopped');
+    if (!run.finished) await finish(run.lostDrive ? 'stopped' : run.active ? (run.fail ? 'done with errors' : 'done') : 'stopped');
   } catch (e) {
+    run.active = false;
     if (e.status === 401 || e.message === 'login') { showLogin(); return; }
     setLine(`Stopped: ${e.message}`);
     await report('stopped', e.message);
@@ -553,12 +650,16 @@ async function report(status, error) {
 }
 
 async function finish(status) {
+  if (run.finished) return;
+  run.finished = true;
   run.active = false;
   await report(status);
   $('stop').classList.add('hidden');
   $('run-tip').classList.add('hidden');
   $('run-title').textContent = status === 'done' ? `“${run.name}” is done ✓` : status === 'stopped' ? `“${run.name}” stopped` : `“${run.name}” finished, ${run.fail} failed`;
-  setNow(status === 'stopped' ? 'Pick the same files again to carry on: nothing gets uploaded twice.' : '');
+  setNow(run.lostDrive ? 'Can\'t read the pendrive any more. Plug it back in, then pick the same files again: nothing gets uploaded twice.'
+    : status === 'stopped' ? 'Pick the same files again to carry on: nothing gets uploaded twice.' : '');
+  if (run.lostDrive) $('run-title').textContent = `“${run.name}”: pendrive not readable`;
   $('retry').classList.toggle('hidden', !run.failed.length);
   $('open-album').classList.remove('hidden');
   $('open-album').href = `${immichUrl}/albums/${run.albumId}`;
@@ -606,6 +707,51 @@ async function loadDrives() {
       <span class="meta">${album}<br>Last run ${new Date(p.updated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}:
       ${num(p.files_total)} picked · ${num(p.uploaded)} new · ${num(p.skipped)} already in Immich${p.failed ? ` · <b>${num(p.failed)} failed</b>` : ''}</span></div>`;
   }).join('');
+}
+
+// ---------- installable app ----------
+let installPrompt = null;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register(base + 'sw.js', { scope: base }).catch(() => {});
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; $('install').classList.remove('hidden'); });
+window.addEventListener('appinstalled', () => $('install').classList.add('hidden'));
+$('install').addEventListener('click', async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice.catch(() => {});
+  installPrompt = null; $('install').classList.add('hidden');
+});
+
+// ---------- stats ----------
+async function loadStats() {
+  const res = await ours('stats');
+  if (res.status === 401) return showLogin();
+  if (!res.ok) return;
+  const s = await res.json(), L = s.library, V = s.videos;
+  const stat = (n, label) => `<div class="stat"><b>${n}</b><small>${label}</small></div>`;
+  $('st-top').innerHTML = stat(num(L.photos), 'photos') + stat(num(L.videos), 'videos') + stat(gb(L.bytes), 'in your library')
+    + stat(`${num(V.indexed)}/${num(V.videos)}`, 'videos searchable');
+  const days = s.uploads_by_day, max = Math.max(1, ...days.map((d) => d.count));
+  $('st-days').innerHTML = days.length ? days.map((d) =>
+    `<div class="b" style="height:${(d.count / max) * 100}%" data-tip="${d.day}: ${num(d.count)} · ${gb(d.bytes)}"></div>`).join('')
+    : '<p class="hint">Nothing uploaded in the last 30 days.</p>';
+  $('st-drives').innerHTML = s.pendrives.length ? s.pendrives.map((p) =>
+    `<div class="drive"><span class="name">${esc(p.name)}</span><span class="badge ${p.status === 'done' ? 'done' : p.status === 'in progress' ? 'progress' : 'failed'}">${esc(p.status)}</span>
+     <span class="meta"><b>${num(p.in_album)}</b> in album · last run ${num(p.uploaded)} new, ${num(p.skipped)} already there${p.failed ? `, <b>${num(p.failed)} failed</b>` : ''} · ${gb(p.bytes_total)}</span></div>`).join('')
+    : '<p class="hint">No pendrives yet.</p>';
+  const langs = Object.entries(V.languages || {}).map(([k, n]) => `${k === 'none' ? 'no speech' : k}: ${num(n)}`).join(' · ') || '-';
+  const fails = (V.failures || []).map((f) => `<li>${esc(f.file)}: ${esc(f.error)}</li>`).join('');
+  $('st-videos').innerHTML = `<div class="meter"><div style="width:${V.videos ? (V.indexed / V.videos) * 100 : 0}%"></div></div>
+    <div class="kv"><span>Searchable</span><span>${num(V.indexed)} of ${num(V.videos)}${V.pending ? ` · ${num(V.pending)} in progress` : ''}</span>
+    <span>Video hours</span><span>${V.hours ?? 0}</span><span>Frames indexed</span><span>${num(V.frames || 0)}</span>
+    <span>Spoken lines</span><span>${num(V.spoken_segments || 0)}</span><span>Languages</span><span>${esc(langs)}</span>
+    <span>Avg. per video</span><span>${V.avg_seconds ?? 0} s</span>
+    <span>Right now</span><span>${s.indexer ? esc(s.indexer.phase + (s.indexer.current ? ': ' + s.indexer.current : '')) : '-'}</span></div>
+    ${fails ? `<p class="hint" style="margin-top:10px">Couldn't read:</p><ul class="hint">${fails}</ul>` : ''}`;
+  const D = s.disk;
+  $('st-server').innerHTML = D ? `<div class="meter"><div style="width:${((D.total - D.free) / D.total) * 100}%"></div></div>
+    <div class="kv"><span>Free space</span><span>${gb(D.free)} of ${gb(D.total)}</span>
+    <span>Library dates</span><span>${when(L.oldest)} – ${when(L.newest)}</span></div>` : '<p class="hint">-</p>';
+  if (!$('tab-stats').classList.contains('hidden')) setTimeout(loadStats, 30000);
 }
 
 start();

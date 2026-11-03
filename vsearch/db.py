@@ -447,6 +447,51 @@ def save_pendrive(conn: psycopg.Connection, owner_id, name: str, fields: dict) -
     conn.commit()
 
 
+def stats(conn: psycopg.Connection, owner_id) -> dict:
+    """Numbers for the Stats tab: the library, uploads per day, video search, pendrives."""
+    lib = conn.execute("""
+        select count(*) filter (where a.type = 'IMAGE'), count(*) filter (where a.type = 'VIDEO'),
+               coalesce(sum(e."fileSizeInByte"), 0),
+               min(a."localDateTime"), max(a."localDateTime")
+        from asset a left join asset_exif e on e."assetId" = a.id
+        where a."ownerId" = %s and a."deletedAt" is null and a.visibility <> 'hidden'
+    """, (owner_id,)).fetchone()
+    days = conn.execute("""
+        select to_char(date_trunc('day', a."createdAt" at time zone 'Asia/Kolkata'), 'YYYY-MM-DD'),
+               count(*), coalesce(sum(e."fileSizeInByte"), 0)
+        from asset a left join asset_exif e on e."assetId" = a.id
+        where a."ownerId" = %s and a."deletedAt" is null and a."createdAt" > now() - interval '30 days'
+        group by 1 order by 1
+    """, (owner_id,)).fetchall()
+    out = {
+        "library": {"photos": lib[0], "videos": lib[1], "bytes": int(lib[2]),
+                    "oldest": lib[3].isoformat() if lib[3] else None, "newest": lib[4].isoformat() if lib[4] else None},
+        "uploads_by_day": [{"day": d, "count": c, "bytes": int(b)} for d, c, b in days],
+        "videos": status_counts(conn, owner_id),
+        "pendrives": pendrives(conn, owner_id),
+    }
+    try:
+        row = conn.execute(f"""
+            select coalesce(sum(v.duration), 0), coalesce(sum(v.segment_count), 0), coalesce(avg(v.took_seconds), 0),
+                   coalesce(sum(v.frame_count), 0)
+            from vsearch.video v join asset a on a.id = v.asset_id where {ELIGIBLE} and a."ownerId" = %s and v.status = 'done'
+        """, (owner_id,)).fetchone()
+        langs = conn.execute(f"""
+            select coalesce(v.language, 'none'), count(*) from vsearch.video v join asset a on a.id = v.asset_id
+            where {ELIGIBLE} and a."ownerId" = %s and v.status = 'done' group by 1 order by 2 desc
+        """, (owner_id,)).fetchall()
+        failed = conn.execute(f"""
+            select a."originalFileName", left(v.error, 160) from vsearch.video v join asset a on a.id = v.asset_id
+            where {ELIGIBLE} and a."ownerId" = %s and v.status = 'failed' order by v.processed_at desc limit 20
+        """, (owner_id,)).fetchall()
+        out["videos"].update(hours=round(float(row[0]) / 3600, 2), spoken_segments=row[1], frames=row[3],
+                             avg_seconds=round(float(row[2]), 1), languages=dict(langs),
+                             failures=[{"file": f, "error": e} for f, e in failed])
+    except psycopg.Error:
+        conn.rollback()
+    return out
+
+
 def status_counts(conn: psycopg.Connection, owner_id) -> dict:
     row = conn.execute(f"""
         select count(*),

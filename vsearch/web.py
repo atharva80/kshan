@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
 import time
 from contextlib import asynccontextmanager
@@ -131,6 +132,37 @@ async def icon():
     return FileResponse(STATIC / "icon.svg", media_type="image/svg+xml")
 
 
+@api.get("/sw.js")
+async def service_worker():
+    # Needed for "Install app". Scope is /vsearch/ only, so it never touches Immich's pages.
+    return FileResponse(STATIC / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@api.get("/icon-{size}.png")
+async def icon_png(size: int):
+    if size not in (192, 512):
+        raise HTTPException(404, "Not found")
+    return FileResponse(STATIC / f"icon-{size}.png", media_type="image/png")
+
+
+@api.get("/api/stats")
+async def stats(request: Request):
+    user = await current_user(request)
+
+    def collect():
+        with services.pool.connection() as conn:
+            return db.stats(conn, user["id"])
+
+    result = await run_in_threadpool(collect)
+    try:
+        st = os.statvfs("/data")
+        result["disk"] = {"total": st.f_blocks * st.f_frsize, "free": st.f_bavail * st.f_frsize}
+    except OSError:
+        result["disk"] = None
+    result["indexer"] = {k: services.indexer.state.get(k) for k in ("phase", "current", "error")} if services.indexer else None
+    return result
+
+
 @api.get("/manifest.webmanifest")
 async def manifest():
     return FileResponse(STATIC / "manifest.webmanifest", media_type="application/manifest+json")
@@ -159,7 +191,7 @@ async def login(body: Login, request: Request):
 @api.get("/api/me")
 async def me(request: Request):
     user = await current_user(request)
-    return {"name": user["name"], "email": user["email"], "immichUrl": config.IMMICH_PUBLIC_URL}
+    return {"id": user["id"], "name": user["name"], "email": user["email"], "immichUrl": config.IMMICH_PUBLIC_URL}
 
 
 @api.get("/api/status")
@@ -220,6 +252,7 @@ async def play(asset_id: UUID, request: Request):
     return StreamingResponse(body(), status_code=upstream.status_code, headers=passthrough)
 
 
+HOOK_TIMEOUT = 8  # seconds
 FORWARD_HEADERS = ("authorization", "cookie", "x-api-key", "x-immich-user-token", "x-immich-session-token",
                    "x-immich-share-key", "x-immich-share-slug", "user-agent", "accept-language", "x-correlation-id")
 
@@ -246,8 +279,10 @@ async def immich_smart_search(request: Request, rest: str = ""):
         items = data["assets"]["items"]
         page = int(body.get("page") or 1)
         size = int(body.get("size") or len(items) or 100)
-        ours = await run_in_threadpool(search.run, services.pool, services.ml, services.embedder,
-                                       user["id"], body["query"], search.KINDS, max(size, 40))
+        # Immich's search bar must never wait on us: past the limit, plain Immich results.
+        ours = await asyncio.wait_for(run_in_threadpool(search.run, services.pool, services.ml, services.embedder,
+                                                        user["id"], body["query"], search.KINDS, max(size, 40)),
+                                      timeout=HOOK_TIMEOUT)
         if not ours:
             return passthrough
         ours_ids = {r["assetId"] for r in ours}
@@ -257,7 +292,8 @@ async def immich_smart_search(request: Request, rest: str = ""):
         else:
             by_id = {i["id"]: i for i in items}
             missing = [r["assetId"] for r in ours if r["assetId"] not in by_id]
-            fetched = await asyncio.gather(*(immich.get(f"/api/assets/{a}", headers=user["headers"]) for a in missing))
+            fetched = await asyncio.wait_for(asyncio.gather(
+            *(immich.get(f"/api/assets/{a}", headers=user["headers"]) for a in missing)), timeout=HOOK_TIMEOUT)
             by_id.update({r.json()["id"]: r.json() for r in fetched if r.status_code == 200})
             order = [a for a in immich_search.blend(items, ours) if a in by_id]
             data["assets"]["items"] = [by_id[a] for a in order]

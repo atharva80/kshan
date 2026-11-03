@@ -122,6 +122,10 @@ way Android's picker would hand them over:
 | "Test Pendrive", same files again | 11 | **0 uploaded, 11 already in Immich**, album still 11, nothing duplicated |
 | "Red 32GB" | 5 of the same + 3 new | **3 new, 5 already in Immich**, its album has 8, the first album still 11 |
 
+| "Green 16GB": 15 files, then the page reloaded (app killed) and the same files picked | 15, then 15 | first run 15 uploaded; after the reload **0 bytes re-read from the files**, 15 recognised in 0.6 s |
+| "Mixed drive": 3 good + 2 unreadable files | 5 | 3 uploaded, 2 failed with *Retry failed*, the run finishes |
+| "Unplugged drive": 8 unreadable files in a row | 8 | stops after 5 with "pendrive not readable", doesn't fail all 8 |
+
 Dates stored by Immich came from the filenames where there was one: `IMG-20190512-WA0001` →
 2019-05-12, `PXL_20210630_101112345` → 2021-06-30 10:11, `Screenshot_2022-03-04-10-11-12` →
 2022-03-04 10:11. Others kept their file time. The SHA-1 matched Node's crypto on 70
@@ -141,6 +145,12 @@ vectors (sizes 0–100003 bytes, odd chunk splits) and on a 50 MB file.
 | bge-m3 pulled an extra 2 GB in the background | transformers fetches a safetensors conversion PR when a repo only has `.bin` | `model_kwargs={"use_safetensors": False}` |
 | Upload progress read "0.2 MB of 0.1 MB" | XHR progress counts multipart overhead | scale progress to the file's own size |
 | The pendrive list showed stale numbers right after a run | the list reloaded before the final progress save landed | await the save; show the album's real count plus the last run's numbers |
+| A stalled connection could hang a pendrive run forever (review) | uploads and API calls had no time limit | time limits on every request and upload |
+| One failed duplicate check aborted the whole run and left workers spinning (review) | no retry; the hashing loop could throw without releasing the workers | retry until the server is back; `finally` always releases them |
+| One unreadable file (or a loose pendrive) aborted the whole run (review) | read errors weren't caught | the file is marked failed; 5 in a row stops the run with a clear message |
+| A failed album add was silently ignored (review) | the response wasn't checked | retry; re-picking adds it later |
+| Immich's search bar could hang if our side was slow (review) | the merge had no time limit | 8 s limit, then plain Immich results |
+| The page was blank when opened as `/vsearch`, or when a blocker refused `upload.js` | relative script URL; separate script file | redirect to `/vsearch/`; scripts inlined |
 | The "survives Immich's re-run" test passed without exercising anything | in v3 a forced Smart Search run didn't rewrite existing video rows | the test now overwrites the rows directly, exactly as Immich's jobs would, then checks the repair |
 
 ## Calibrating thresholds on your own library
