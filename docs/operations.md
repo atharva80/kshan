@@ -110,6 +110,8 @@ Finally delete `/srv/immich/vsearch` and `docker volume rm immich-vsearch-models
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
+| The `/vsearch` page is blank | an old build loaded scripts as separate files, which a blocker refused; or the URL had no trailing slash | update; the page now inlines its scripts and fixes the slash itself |
+| No "Find in videos" / "Pendrives" in Immich's sidebar | opened on `localhost` instead of the tailnet address, or Immich changed its sidebar markup | use `https://<host>:8443`; check `curl -s https://<host>:8443/photos \| grep -c data-vsearch-sidebar` |
 | `/health` says `paused` | Immich schema changed after an upgrade | see [Updating Immich](#updating-immich) |
 | Search in the Immich app fails (everything else works) | the vsearch container is down, and Tailscale routes `/api/search/smart` to it | `docker compose up -d vsearch`; or remove the route: `sudo tailscale serve --https=8443 --set-path=/api/search/smart off` |
 | Search bar doesn't find videos by speech | plain query only gets merged; searching with filters (people, place, date) passes through | search without filters, or use the companion page |

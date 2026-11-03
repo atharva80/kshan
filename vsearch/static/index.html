@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+  // Opened as /vsearch (no slash), every relative URL below would point at Immich instead.
+  if (!location.pathname.endsWith('/')) location.replace(location.pathname + '/' + location.search + location.hash);
+</script>
 <title>Immich Video Search</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
@@ -236,7 +240,7 @@
 </dialog>
 
 <script type="module">
-import { sha1File, dateFromName, MEDIA } from './upload.js';
+import { sha1File, dateFromName, MEDIA } from './lib.js';
 
 // The page lives at <immich>/vsearch/ (same origin as Immich) or on its own port for testing.
 const base = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';

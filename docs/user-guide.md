@@ -33,8 +33,8 @@ The Immich app backs up the phone's own gallery but can't open a pendrive, so pe
 through the **Pendrives** page.
 
 1. Plug the pendrive into the phone with the OTG adapter.
-2. In **Chrome**, with Tailscale on, open `https://YOUR-SERVER:8443/vsearch/#pendrives`.
-   Log in with your Immich email and password.
+2. In **Chrome**, with Tailscale on, open Immich (`https://YOUR-SERVER:8443`) and tap
+   **Pendrives** in the side menu, or go straight to `https://YOUR-SERVER:8443/vsearch/#pendrives`.
    - Tip: **⋮ → Add to Home screen** makes it open like an app.
 3. Type a **name** for this pendrive, e.g. *Blue 64GB*. That becomes the album
    **"Pendrive - Blue 64GB"** in Immich.
@@ -76,7 +76,8 @@ The best matches come first, photos and videos together.
 
 ### Jump to the exact second: the *Find in videos* page
 
-`https://YOUR-SERVER:8443/vsearch/` (the other tab of the same page):
+On the Immich website, tap **Find in videos** in the side menu, or open
+`https://YOUR-SERVER:8443/vsearch/`.
 - Each result shows **moments** on a small timeline:
   - **Seen 0:20**: it's on screen at 0:20
   - **Said 1:12 "…"**: someone says it (`EN:` means it matched the English translation)
@@ -84,7 +85,18 @@ The best matches come first, photos and videos together.
 - Tap a moment and the video plays **from that second**.
 - **Save these videos as an Immich album** keeps the results.
 
-## 5. Sort, and copy back to pendrives
+## 5. Notes, tags, favorites (built into Immich)
+
+- **Notes:** open a photo → **ⓘ** → **Add a description**. Description search finds them.
+  Video transcripts (🎙) sit in the same box, and your own text is kept.
+- **Favorites:** the ♥ on any photo. They're listed under **Favorites**.
+- **Star ratings and tags:** switch them on in **Account Settings → Features**. Tags then show
+  in the info panel and under **Tags**. Pendrive uploads get their album automatically.
+- **Hide something:** **Archive** takes it off the timeline, and the **Locked Folder** needs a PIN.
+- **Immich's own Upload button** still works as usual for quick uploads. Use the Pendrives page
+  for whole pendrives (album, tracking, resume).
+
+## 6. Sort, and copy back to pendrives
 
 Everything is in Immich now, so sorting happens there (app or web):
 - **Make albums:** long-press to select photos/videos → **+** → **Add to album** / **New album**.
@@ -98,7 +110,7 @@ Everything is in Immich now, so sorting happens there (app or web):
 > **Don't delete originals** from the phone or pendrives until whoever runs the server says
 > there's a backup.
 
-## 6. If something doesn't work
+## 7. If something doesn't work
 
 | What you see | Try |
 |---|---|

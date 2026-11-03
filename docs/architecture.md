@@ -10,6 +10,7 @@ How `vsearch` works inside, and how it fits around Immich without forking it.
 - [Scene-balanced pooling](#scene-balanced-pooling)
 - [The search side](#the-search-side)
 - [Inside Immich's own search bar](#inside-immichs-own-search-bar)
+- [Sidebar entries inside Immich's web UI](#sidebar-entries-inside-immichs-web-ui)
 - [Pendrive uploads from a phone](#pendrive-uploads-from-a-phone)
 - [Web app, auth and playback](#web-app-auth-and-playback)
 - [Safety rails](#safety-rails)
@@ -338,6 +339,39 @@ sequenceDiagram
 - **Failure mode:** any exception falls back to Immich's untouched response. The one hard
   dependency is that the vsearch container must be running (`restart: always`).
 
+## Sidebar entries inside Immich's web UI
+
+Immich has no plugin hook for its UI, so vsearch passes Immich's **pages** through and adds
+one **inline** `<script data-vsearch-sidebar>` (the contents of `static/sidebar.js`) before `</head>`.
+It's inline on purpose: some browsers and blockers refuse separate script files from a tailnet
+host (`ERR_BLOCKED_BY_CLIENT`), which left the companion page blank during testing. For the same
+reason the page inlines `lib.js` (SHA-1, filename dates) when it's served.
+
+| Tailscale route | Goes to | Why |
+|---|---|---|
+| `/` | vsearch `/immich-web/...` | HTML pages (and small root files like `manifest.json`), with the script added |
+| `/api` | Immich | API, uploads, websockets (`/api/socket.io`): never touch vsearch |
+| `/_app` | Immich | the web app's JS/CSS bundles |
+| `/api/search/smart` | vsearch hook | the merged search (longest prefix wins) |
+| `/vsearch` | vsearch | the companion page |
+
+`sidebar.js` (deliberately not called inject.js: ad blockers filter names like that, and an earlier `upload.js` got blocked):
+- **finds** Immich's sidebar link to `/explore`
+- **clones** a non-active sibling link twice, so the new entries get exactly Immich's markup
+  and styling
+- **relabels** them "Find in videos" / "Pendrives" with their own icons
+- **adds** `data-sveltekit-reload`, so clicking does a real page load instead of a client-side
+  route Immich doesn't know
+- **watches** with a `MutationObserver` (batched per animation frame), so the entries come back
+  when Immich re-renders the sidebar: navigation, the phone menu, resizing
+
+If the sidebar can't be found, it does nothing, so a future Immich layout change degrades to
+plain Immich rather than breaking it.
+
+**Tested** on a real Immich v3.3.5 web UI: both entries appeared after Explore, styled
+natively, and survived navigating Explore → Albums → Photos. Immich sends no
+Content-Security-Policy that would block the script.
+
 ## Pendrive uploads from a phone
 
 The **Pendrives** tab is built for someone with only a phone and an OTG adapter. Everything
@@ -346,7 +380,7 @@ happens in the browser, talking to Immich's own API on the same origin:
 1. **Pick:** the Android or iOS file picker shows the USB drive. Media files are kept
    (by extension or MIME type), and a file picked twice is counted once.
 2. **Album:** `Pendrive - <name>` is created, or reused if it already exists.
-3. **Fingerprint:** `upload.js` hashes each file with a streaming SHA-1 in 4 MB slices, so
+3. **Fingerprint:** `lib.js` hashes each file with a streaming SHA-1 in 4 MB slices, so
    multi-GB videos never sit in memory. It matches Node's crypto on 70 test vectors, at
    ~185 MB/s on desktop.
 4. **Ask Immich what it has:** `POST /api/assets/bulk-upload-check` in batches of 20. Files
@@ -414,5 +448,6 @@ safe**. That's the resume mechanism.
 | `vsearch/web.py` | FastAPI routes, auth, prefix handling, playback proxy, search-bar hook, pendrive progress |
 | `vsearch/immich_search.py` | which search-bar requests get merged, and the blend order |
 | `vsearch/static/index.html` | the whole page: Search + Pendrives tabs (vanilla JS, mobile-first, light/dark) |
-| `vsearch/static/upload.js` | streaming SHA-1, filename dates, media filter |
+| `vsearch/static/lib.js` | streaming SHA-1, filename dates, media filter |
+| `vsearch/static/sidebar.js` | the two sidebar entries inside Immich's web UI |
 | `vsearch/config.py` | every setting, from environment variables |

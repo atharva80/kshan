@@ -45,9 +45,10 @@ cloud and no new app for the person using it. Access over the internet had to st
 ```mermaid
 flowchart LR
     phone["Phone / iPad<br/>Immich app + browser"] -- "Tailscale (private)" --> ts{{"tailscale serve :8443"}}
-    ts -- "/*" --> immich
+    ts -- "/api, /_app" --> immich
     ts -- "/api/search/smart" --> vs
     ts -- "/vsearch" --> vs
+    ts -- "pages (+ sidebar entries)" --> vs
     subgraph server["One machine, one Docker Compose stack"]
         immich["Immich server"] --> db[("Postgres<br/>+ vsearch schema")]
         ml["Immich ML (CUDA)<br/>SigLIP2 · OCR · faces"]
@@ -85,7 +86,11 @@ flowchart LR
    **visual** matches. The response keeps Immich's exact format, so the apps can't tell.
    Filtered searches (people, places, dates, photos-only) pass through untouched, and any error
    falls back to Immich's own answer.
-8. **It serves a companion page** at `/vsearch`, styled like Immich, with two tabs:
+8. **It adds two entries to Immich's own sidebar** (web): **Find in videos** and **Pendrives**,
+   right under Explore and styled like the items around them. Immich's pages pass through
+   vsearch, which adds one `<script>` tag. Immich's API, uploads, websockets and assets stay
+   direct. If Immich's markup ever changes, the script does nothing.
+9. **It serves a companion page** at `/vsearch`, styled like Immich, with two tabs:
    - **Find in videos:** results open the player at the exact second ("Seen 0:20",
      "Said 1:12 'happy birthday…'", "Written 0:08 GOA 2023") on a mini timeline, and can be
      saved as an album.
@@ -94,7 +99,7 @@ flowchart LR
      has are skipped. Everything lands in the album `Pendrive - <name>`. The screen stays on,
      failures retry, and dates come from WhatsApp/camera filenames. A list shows every pendrive
      and its status. Stop and re-pick at any time: nothing uploads twice.
-9. **It keeps its results in place.** If Immich re-runs a job and overwrites a video's entries,
+10. **It keeps its results in place.** If Immich re-runs a job and overwrites a video's entries,
    the next pass (30 s later) puts them back.
 
 ## Results
@@ -171,9 +176,12 @@ The full walkthrough is in **[docs/setup.md](docs/setup.md)**.
 
 - **The Immich apps can't jump to a second.** They're native, so a merged result opens the video
   at the start. The companion page is the jump-to-the-moment tool.
-- **The search-bar merge only works through the Tailscale address** (`:8443`), since that's where
-  the route lives. Opening Immich on `localhost` gives plain Immich search. If the vsearch container
-  is down, searches over the tailnet fail until it restarts (`restart: always`).
+- **The search-bar merge and sidebar entries only exist on the Tailscale address** (`:8443`),
+  since that's where the routes live. Opening Immich on `localhost` gives plain Immich. If the
+  vsearch container is down, the Immich *website* and search over the tailnet stop until it
+  restarts (`restart: always`). The phone apps keep uploading and browsing.
+- **The phone apps can't get sidebar entries**, because they're native. Add the page to the home
+  screen instead.
 - **Phone browsers can't always pick a whole folder.** On Android you pick a folder's files
   (⋮ → Select all), one folder at a time. Keep the page open and the phone charging while it uploads.
 - **Matching speech by meaning has thin margins.** On the tests, true paraphrases scored ≥ 0.607

@@ -8,7 +8,11 @@ set -euo pipefail
 
 PORT="${IMMICH_HTTPS_PORT:-8443}"   # 443 is often taken by other serve configs; 8443 works fine in the apps
 
-tailscale serve --bg --https="$PORT" http://127.0.0.1:2283
+# Immich's web pages go through vsearch, which adds "Find in videos" and "Pendrives" to the
+# sidebar. Its API (uploads, websockets) and assets stay direct to Immich.
+tailscale serve --bg --https="$PORT" http://127.0.0.1:2284/immich-web
+tailscale serve --bg --https="$PORT" --set-path=/api http://127.0.0.1:2283/api
+tailscale serve --bg --https="$PORT" --set-path=/_app http://127.0.0.1:2283/_app
 tailscale serve --bg --https="$PORT" --set-path=/vsearch http://127.0.0.1:2284
 # Immich's own search bar (apps + web) -> vsearch, which asks Immich and blends in video moments
 tailscale serve --bg --https="$PORT" --set-path=/api/search/smart http://127.0.0.1:2284/hook/smart-search

@@ -19,7 +19,9 @@ EXACT = 0.95  # exact words said or written (and the very best visual match) sco
 def mergeable(body: dict) -> bool:
     if not isinstance(body, dict) or not str(body.get("query") or "").strip():
         return False
-    if set(body) - MERGEABLE_FIELDS:
+    # The phone apps send every filter with an empty default (false / null / []); only a
+    # filter that's actually set makes the search one we can't answer.
+    if any(body[k] not in (None, False, "", []) for k in set(body) - MERGEABLE_FIELDS):
         return False
     if body.get("type") not in (None, "VIDEO"):
         return False

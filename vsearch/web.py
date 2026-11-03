@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -112,12 +113,17 @@ async def health():
 
 @api.get("/")
 async def page():
-    return FileResponse(STATIC / "index.html", headers=NO_CACHE)
+    # lib.js is inlined: some browsers/blockers refuse separate script files from a tailnet
+    # host (seen as ERR_BLOCKED_BY_CLIENT), and then the page stays blank.
+    lib = re.sub(r"^export ", "", (STATIC / "lib.js").read_text(), flags=re.M)
+    html = (STATIC / "index.html").read_text().replace(
+        "import { sha1File, dateFromName, MEDIA } from './lib.js';", lib)
+    return Response(html, media_type="text/html", headers=NO_CACHE)
 
 
-@api.get("/upload.js")
-async def upload_js():
-    return FileResponse(STATIC / "upload.js", media_type="text/javascript", headers=NO_CACHE)
+@api.get("/lib.js")
+async def lib_js():
+    return FileResponse(STATIC / "lib.js", media_type="text/javascript", headers=NO_CACHE)
 
 
 @api.get("/icon.svg")
@@ -331,6 +337,45 @@ async def _to_immich(request: Request):
 
 for _path in IMMICH_PASSTHROUGH:
     api.add_api_route(_path, _to_immich, methods=["GET", "POST", "PUT"], include_in_schema=False)
+
+
+# Immich's web app, passed through so its pages can carry our sidebar entries.
+# Tailscale serve sends "/" here (as /immich-web/...), while /api and /_app stay direct to
+# Immich, so uploads, websockets and assets never touch this path.
+INJECT = b"<script data-vsearch-sidebar>" + (STATIC / "sidebar.js").read_bytes() + b"</script>"  # inline, see page()
+HOP_HEADERS = {"connection", "keep-alive", "transfer-encoding", "content-length", "content-encoding", "upgrade"}
+
+
+@api.api_route("/immich-web", methods=["GET", "HEAD", "POST"])
+@api.api_route("/immich-web/{path:path}", methods=["GET", "HEAD", "POST"])
+async def immich_web(request: Request, path: str = ""):
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP_HEADERS | {"host", "accept-encoding"}}
+    upstream = await immich.send(immich.build_request(
+        request.method, "/" + path, params=request.query_params, headers=headers,
+        content=await request.body() if request.method == "POST" else None), stream=True)
+    out_headers = [(k, v) for k, v in upstream.headers.multi_items() if k.lower() not in HOP_HEADERS]
+    if "text/html" in upstream.headers.get("content-type", ""):
+        html = await upstream.aread()
+        await upstream.aclose()
+        if b"data-vsearch-sidebar" not in html:
+            html = html.replace(b"</head>", INJECT + b"</head>", 1)
+        response = Response(html, status_code=upstream.status_code)
+    else:
+        async def body():
+            try:
+                async for chunk in upstream.aiter_bytes():
+                    yield chunk
+            finally:
+                await upstream.aclose()
+        response = StreamingResponse(body(), status_code=upstream.status_code)
+    for k, v in out_headers:
+        response.headers.append(k, v)
+    return response
+
+
+@api.get("/sidebar.js")
+async def sidebar_js():
+    return FileResponse(STATIC / "sidebar.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
 
 
 class Album(BaseModel):
