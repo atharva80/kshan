@@ -1,109 +1,110 @@
 # User guide
 
-For the person whose photos and videos these are. No technical knowledge needed. Whoever runs
-the server will give you three things:
+For the person whose photos and videos these are. **A phone is all you need**, plus the small
+OTG adapter for pendrives. No computer required.
 
+Whoever runs the server gives you:
 - an **invite link** for Tailscale
 - your **Immich email and password**
 - the **server address**, which looks like `https://something.tail1234.ts.net:8443`
 
 ## 1. Connect (once, about 5 minutes)
 
-1. **Install Tailscale** (Play Store / App Store) and sign in with **your own** Google or Apple
-   account.
-2. **Open the invite link** and accept it. The server now appears in your Tailscale app.
-3. Keep Tailscale **switched on** whenever you use your photos. On Android:
+1. **Install Tailscale** (Play Store / App Store) and sign in with **your own** Google or Apple account.
+2. **Open the invite link** and accept it.
+3. Keep Tailscale **on** whenever you use your photos. On Android:
    Settings → Network → VPN → Tailscale → **Always-on VPN**.
-4. **Install Immich**, then enter the server address. It must end in `:8443`. Log in with the
-   email and password you were given.
+4. **Install Immich**, enter the server address (it ends in `:8443`), and log in.
 
-## 2. Back up your phone and iPad
+## 2. Back up your phone and iPad (Immich app)
 
 In the Immich app, tap the **cloud icon** → **Select albums**:
-
-- Android: **Camera**, **WhatsApp Images**, **WhatsApp Video**, **Screenshots**, and anything else you care about
-- iPhone/iPad: **Recents** covers everything
+- Android: Camera, WhatsApp Images, WhatsApp Video, Screenshots…
+- iPhone/iPad: Recents
 
 Then:
-- In Backup settings, choose **Wi-Fi only** so it doesn't eat your mobile data.
-- Do the **first big backup on Wi-Fi with the phone charging**, and keep the app open until it
-  finishes. iPhones and iPads pause background uploads a lot.
-- From then on, new photos and videos upload by themselves.
+- In backup settings, choose **Wi-Fi only**.
+- Do the first big backup on Wi-Fi with the phone charging, keeping the app open.
+- After that, new photos upload by themselves.
 
-> **Don't delete anything from your phone yet**, even after it says everything is backed up.
-> Wait until whoever runs the server tells you a second copy (a backup) exists.
+## 3. Upload pendrives (phone browser)
 
-## 3. Upload the pendrives
+The Immich app backs up the phone's own gallery but can't open a pendrive, so pendrives go
+through the **Pendrives** page.
 
-You don't need to sort anything first. Upload everything as it is. Immich:
-- puts everything in date order, using the date inside each photo or video
-- **skips exact duplicates automatically,** even across different pendrives
-- keeps the originals untouched
+1. Plug the pendrive into the phone with the OTG adapter.
+2. In **Chrome**, with Tailscale on, open `https://YOUR-SERVER:8443/vsearch/#pendrives`.
+   Log in with your Immich email and password.
+   - Tip: **⋮ → Add to Home screen** makes it open like an app.
+3. Type a **name** for this pendrive, e.g. *Blue 64GB*. That becomes the album
+   **"Pendrive - Blue 64GB"** in Immich.
+4. Tap **Choose photos & videos**. In the picker, open the **USB drive**, go into a folder,
+   then **⋮ → Select all** → Select.
+   - Folders with sub-folders: pick one folder, then tap the button again for the next.
+     Everything goes into one list.
+   - If your phone shows **Choose a whole folder**, that picks a folder with everything inside it.
+5. Tap **Start upload**. You'll see a progress bar, *uploaded*, *already in Immich*, *failed*,
+   *left*, the speed, and the time remaining.
+6. **Keep the page open with the phone charging.** The screen stays on by itself. It's fine
+   to leave it overnight.
 
-Start with the **smallest pendrive**, to see how fast it goes.
+**If it stops** (call, low battery, Wi-Fi drop, closed tab), open the page again and pick the
+**same files**. Anything already uploaded is recognised and skipped in seconds, so nothing ever
+uploads twice, even across different pendrives.
 
-### Best: from any laptop (Windows or Mac)
+**Your pendrives** at the bottom of the page lists every pendrive: how many photos and videos
+are in its album, and what the last run did. Tap the count to open the album.
 
-1. Install Tailscale on the laptop and sign in with **your** account.
-2. In Immich (web or app): **Account Settings → API Keys → New API Key**. Copy the key.
-3. Download **immich-go** from [github.com/simulot/immich-go/releases](https://github.com/simulot/immich-go/releases).
-   It's one file, nothing to install.
-4. Plug in the pendrive (say it shows up as `E:`), open a terminal next to `immich-go`, and run:
-
-   ```
-   immich-go upload from-folder --server=https://YOUR-SERVER:8443 --api-key=YOUR_KEY E:\
-   ```
-
-5. Leave it running. If it stops, run the same command again: files already uploaded are skipped.
-   immich-go also reads dates from WhatsApp-style file names (`IMG-20190512-WA0001.jpg`).
-
-### Phone only (Android)
-
-Plug the pendrive into the phone with the OTG adapter. Open **Chrome** with Tailscale on, go to
-the server address, log in, then tap **Upload** (top right) and pick files from the USB drive.
-Go one folder at a time, and keep the screen on. It's slower than a laptop, but it works.
-
-### iPad
-
-Same as the phone, using **Safari** and the **Files** app. A 10th-gen iPad has USB-C. A
-9th-gen iPad needs Apple's **Lightning to USB 3 Camera Adapter** (the one with a charging port),
-because many pendrives need more power than the iPad gives.
+Good to know:
+- **Duplicates:** the same photo on three pendrives is stored **once**, and shows in all three
+  pendrive albums.
+- **Dates:** photos and videos keep their real date. WhatsApp-style names
+  (`IMG-20190512-WA0001.jpg`, `VID-…`, `Screenshot_…`) are dated from the name when the file has
+  no date inside it.
+- **Failed files:** failures (unreadable files) are listed with a **Retry failed** button.
 
 ## 4. Find things
 
-### In the Immich app (the search bar)
+### Immich's search bar (in the app or on the web)
 
-Type what you remember, in plain words:
-- **What's in it:** "cake with candles", "beach at sunset", "black dog", "fireworks"
-  - Videos are now searched by **every scene**, not just their first frame.
-- **Words written in it:** switch the search type to **OCR**, e.g. "diwali", "goa 2023", a shop name
-- **What someone said:** switch the search type to **Description**, e.g. "birthday", "park"
-  - Every video with talking gets the words written into its description (🎙). Hindi and
-    Marathi also get an English translation (🌐), so English words find those too.
+Just type. It now searches **inside videos** too:
+- things you'd **see**: "cake with candles", "black dog", "fireworks", "beach"
+- things someone **said**, even in Hindi or Marathi: "happy birthday", "park", "Goa"
+- **writing** on screen: "diwali", a shop name, "goa 2023"
 
-### The video search page: jump to the exact moment
+The best matches come first, photos and videos together.
 
-Open `https://YOUR-SERVER:8443/vsearch/` in your phone's browser and log in with the same Immich
-email and password. Tip: use **Add to Home screen** and it opens like an app.
+### Jump to the exact second: the *Find in videos* page
 
-- Type anything: "cat", "happy birthday", "going to Goa", "diwali".
-- Every result shows **moments**:
-  - **Seen 0:20**: it appears on screen at 0:20
-  - **Said 1:12 "…"**: someone says it at 1:12 (`EN:` means it matched the English translation)
-  - **Written 0:08 GOA 2023**: the text appears on screen at 0:08
-- Tap a moment and the video **plays from that second**. Tap another moment to jump.
-- Use the buttons along the top to search only **On screen**, **Said** or **Written**.
-- **Open in Immich** opens the video in Immich. **Save these videos as an Immich album** turns
-  the results into an album.
+`https://YOUR-SERVER:8443/vsearch/` (the other tab of the same page):
+- Each result shows **moments** on a small timeline:
+  - **Seen 0:20**: it's on screen at 0:20
+  - **Said 1:12 "…"**: someone says it (`EN:` means it matched the English translation)
+  - **Written 0:08**: the text appears on screen
+- Tap a moment and the video plays **from that second**.
+- **Save these videos as an Immich album** keeps the results.
 
-New uploads become searchable here within a few minutes. The page shows how many videos are
-indexed so far.
+## 5. Sort, and copy back to pendrives
 
-## 5. If something doesn't work
+Everything is in Immich now, so sorting happens there (app or web):
+- **Make albums:** long-press to select photos/videos → **+** → **Add to album** / **New album**.
+- **Find what to put in them:** use the search bar (people, places, things, words said).
+- **People:** Immich groups faces automatically. Name them under **Explore → People**.
+- **Copy an album onto a pendrive:** open the album → **⋮ → Download**. Big albums come as
+  several ZIP parts (you can change the part size in Account Settings → Download). Then move
+  the files to the pendrive with the phone's **Files** app. Do one album at a time if the
+  phone is short on space.
+
+> **Don't delete originals** from the phone or pendrives until whoever runs the server says
+> there's a backup.
+
+## 6. If something doesn't work
 
 | What you see | Try |
 |---|---|
-| Immich says it can't reach the server | Is Tailscale switched on? Is the server computer on and awake? |
-| The search page asks you to log in again | Log in with your Immich email and password. Sessions last a long time, but phones clear them sometimes. |
-| A brand-new video isn't found on the search page | Give it a few minutes; it's indexed after Immich finishes processing it |
-| Uploads are very slow | Try another Wi-Fi, or upload the pendrives from a laptop with immich-go |
+| Can't reach the server | Is Tailscale on? Is the server computer on? |
+| The page asks you to log in | Log in with your Immich email and password |
+| Upload shows "Can't reach the server… retrying" | It waits and continues by itself. Check Tailscale/Wi-Fi |
+| Upload stopped | Open the page, pick the same files again: done ones are skipped |
+| A brand-new video isn't found by what's said in it | Give it a few minutes to be processed |
+| The picker doesn't show the pendrive | Unplug and replug it. Some phones need *USB file transfer* turned on in the notification |

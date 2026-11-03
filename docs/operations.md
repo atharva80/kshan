@@ -111,6 +111,10 @@ Finally delete `/srv/immich/vsearch` and `docker volume rm immich-vsearch-models
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `/health` says `paused` | Immich schema changed after an upgrade | see [Updating Immich](#updating-immich) |
+| Search in the Immich app fails (everything else works) | the vsearch container is down, and Tailscale routes `/api/search/smart` to it | `docker compose up -d vsearch`; or remove the route: `sudo tailscale serve --https=8443 --set-path=/api/search/smart off` |
+| Search bar doesn't find videos by speech | plain query only gets merged; searching with filters (people, place, date) passes through | search without filters, or use the companion page |
+| A pendrive upload keeps saying "can't reach the server" | Tailscale off on the phone, or server asleep | it resumes by itself once reachable |
+| Pendrive list says "paused" | the page was closed mid-run | open the page and pick the same files; done ones are skipped |
 | Videos stay `pending` | uploaded < 60 s ago, or Immich's metadata job hasn't run yet | wait; check Immich's Jobs page |
 | `failed` with `ffmpeg frame sampling failed` | corrupt or unusual file | try `ffprobe` on it; it's retried twice, then skipped |
 | `whisper on cuda failed … trying next device` | CUDA libraries or VRAM | check `nvidia-smi`; it falls back to CPU (slow but works) |

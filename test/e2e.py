@@ -124,7 +124,9 @@ def setup(library: Path):
     BASELINE.write_text(json.dumps(baseline, indent=1))
     print("baseline Immich smart-search ranks (before the indexer):")
     for q, ranks in baseline.items():
-        print(f"  {q!r}: {EXPECT[q][0]} at #{ranks[EXPECT[q][0]]}")
+        name = EXPECT[q][0]
+        name = next(iter(name)) if isinstance(name, dict) else name
+        print(f"  {q!r}: {name} at #{ranks[name]}")
 
 
 class Report:
@@ -147,7 +149,10 @@ def vsearch(path, headers=None, raw=False):
 def wait_indexed(timeout=1800):
     deadline = time.time() + timeout
     while time.time() < deadline:
-        status, body, _ = vsearch("/api/status")
+        try:
+            status, body, _ = vsearch("/api/status")
+        except OSError as e:  # container still starting
+            status, body = None, repr(e)
         if status == 200 and body["videos"] and body["indexed"] + body["failed"] == body["videos"]:
             return body
         print("  indexer:", body if status == 200 else status)
@@ -227,6 +232,29 @@ def check():
     r.add("🌐" in desc, "Hindi video's info panel shows transcript + English translation", desc.replace("\n", " | ")[:120])
     _, asset, _ = call("GET", f"{IMMICH}/assets/{names['cat_photo.jpg']}", headers=key_headers())
     r.add(not ((asset.get("exifInfo") or {}).get("description") or ""), "plain photo left untouched")
+
+    print("Immich's own search bar, merged (POST /api/search/smart routed to vsearch):")
+    hook = "http://127.0.0.1:2294/hook/smart-search"
+    def ranked(url, body, name):
+        _, data, _ = call("POST", url, body, key_headers())
+        order = [a["originalFileName"] for a in data["assets"]["items"]]
+        return (order.index(name) + 1 if name in order else None), data
+    for q, name, want in [("make a wish", "bday_party.mp4", 1), ("happy birthday Priya", "bday_party.mp4", 1),
+                          ("park with the dog this evening", "park_hindi.mp4", 1), ("holiday next month", "goa_text.mp4", 1),
+                          ("a cat", "trip_cat_mid.mp4", 2), ("fireworks at night", "goa_text.mp4", 2)]:
+        plain, _ = ranked(f"{IMMICH}/search/smart", {"query": q, "size": 50}, name)
+        merged, _ = ranked(hook, {"query": q, "size": 50}, name)
+        r.add(merged is not None and merged <= want and (plain is None or merged <= plain),
+              f"search bar {q!r}: {name} at #{want} or better", f"plain Immich #{plain} -> merged #{merged}")
+    _, plain = ranked(f"{IMMICH}/search/smart", {"query": "dog", "type": "IMAGE"}, "")
+    _, merged = ranked(hook, {"query": "dog", "type": "IMAGE"}, "")
+    r.add(plain == merged, "filtered searches (photos only, people, places...) pass through untouched")
+    _, merged = ranked(hook, {"query": "Goa"}, "")
+    _, plain = ranked(f"{IMMICH}/search/smart", {"query": "Goa"}, "")
+    r.add(set(merged["assets"]["items"][0]) == set(plain["assets"]["items"][0]),
+          "merged results have exactly Immich's asset fields (apps can't tell)")
+    status, _, _ = call("POST", hook, {"query": "Goa"})
+    r.add(status == 401, "merged search without a login is refused by Immich", f"HTTP {status}")
 
     print("page features:")
     status, body, _ = vsearch("/api/search?q=" + urllib.request.quote("a cat"))

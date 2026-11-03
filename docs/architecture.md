@@ -9,6 +9,8 @@ How `vsearch` works inside, and how it fits around Immich without forking it.
 - [Keeping results in place (reconcile)](#keeping-results-in-place-reconcile)
 - [Scene-balanced pooling](#scene-balanced-pooling)
 - [The search side](#the-search-side)
+- [Inside Immich's own search bar](#inside-immichs-own-search-bar)
+- [Pendrive uploads from a phone](#pendrive-uploads-from-a-phone)
 - [Web app, auth and playback](#web-app-auth-and-playback)
 - [Safety rails](#safety-rails)
 - [Code map](#code-map)
@@ -190,6 +192,17 @@ erDiagram
         text key PK "frame_dim, text_dim, segment_schema"
         jsonb value
     }
+    pendrive {
+        uuid owner_id PK
+        text name PK
+        uuid album_id "Immich album Pendrive - name"
+        int files_total "picked in the last run"
+        int uploaded
+        int skipped "already in Immich"
+        int failed
+        bigint bytes_total
+        text status "in progress | done | done with errors | stopped"
+    }
 ```
 
 - **`frame.embedding` has the CLIP model's dimension** (1152 for SigLIP2 SO400M). It's fixed
@@ -286,6 +299,75 @@ a video that matches in several ways ranks higher. Moments of the same kind clos
 collapse into one, and up to 6 moments are returned per video. Each moment gets the nearest
 sampled frame as its thumbnail.
 
+## Inside Immich's own search bar
+
+`tailscale serve` routes exactly one Immich endpoint, `POST /api/search/smart`, to
+`vsearch` (`/hook/smart-search`). Every other request goes straight to Immich.
+
+```mermaid
+sequenceDiagram
+    participant App as Immich app / web
+    participant V as vsearch hook
+    participant I as Immich
+    App->>V: POST /api/search/smart {query, page, size}
+    V->>I: same request, same credentials
+    I-->>V: Immich's results
+    alt mergeable (plain query, page 1) and logged in
+        V->>V: our search: frames, speech, OCR (this user's videos only)
+        V->>I: GET /api/assets/{id} for videos Immich didn't return
+        V-->>App: Immich's JSON with videos blended in
+    else filters, shared links, errors, nothing found
+        V-->>App: Immich's response, byte for byte
+    end
+```
+
+- **When it merges:** only for requests with just `query`, `page`, `size`, and a few harmless
+  flags (`immich_search.MERGEABLE_FIELDS`). People, places, dates, albums, "similar to this
+  photo", photos-only and shared-link searches pass through unchanged, because our results
+  can't honor those filters.
+- **Ordering (`immich_search.blend`):**
+  - Videos where the query was **said or written exactly** go first.
+  - Other video matches go near the top (slots 1, 3, 5, …), never lower than where Immich
+    already ranked them.
+  - Everything else keeps Immich's order.
+- **Page 2 and beyond:** videos that were moved onto page 1 are removed, so they don't show twice.
+- **Fidelity:** extra videos are fetched with `GET /api/assets/{id}` as the user, so every item
+  is the exact object Immich would return, and the apps can't tell the difference.
+- **Credentials:** the hook forwards the user's own credentials (cookie, Bearer,
+  `x-immich-user-token` from the mobile apps, API key), and Immich does the authentication.
+- **Failure mode:** any exception falls back to Immich's untouched response. The one hard
+  dependency is that the vsearch container must be running (`restart: always`).
+
+## Pendrive uploads from a phone
+
+The **Pendrives** tab is built for someone with only a phone and an OTG adapter. Everything
+happens in the browser, talking to Immich's own API on the same origin:
+
+1. **Pick:** the Android or iOS file picker shows the USB drive. Media files are kept
+   (by extension or MIME type), and a file picked twice is counted once.
+2. **Album:** `Pendrive - <name>` is created, or reused if it already exists.
+3. **Fingerprint:** `upload.js` hashes each file with a streaming SHA-1 in 4 MB slices, so
+   multi-GB videos never sit in memory. It matches Node's crypto on 70 test vectors, at
+   ~185 MB/s on desktop.
+4. **Ask Immich what it has:** `POST /api/assets/bulk-upload-check` in batches of 20. Files
+   Immich already holds (from an earlier run, or another pendrive) are skipped, and their
+   existing IDs are added to the album.
+5. **Upload** the rest, 2 at a time, with `POST /api/assets` (multipart). If a filename
+   carries a date (`IMG-20190512-WA0001`, `PXL_20210630_101112345`, `Screenshot_2022-03-04-10-11-12`,
+   `WhatsApp Video 2021-08-15 at 21.04.33`), it's sent as `fileCreatedAt`. Immich uses that
+   when the file has no EXIF date, and EXIF still wins when present.
+6. **Retries:** network and 5xx errors wait until `/api/server/ping` answers again, then back
+   off (2 s → 60 s, 5 tries). A 401 shows the login form. Other 4xx errors mark the file failed,
+   and a *Retry failed* button re-runs just those.
+7. **Album and progress:** IDs are added to the album in batches. Progress is saved to
+   `vsearch.pendrive` every 10 s and at the end, so the list survives closing the page and
+   shows from any device.
+8. **Staying awake:** the Screen Wake Lock API keeps the phone awake while uploading, and
+   re-acquires the lock when the page becomes visible again.
+
+Because skipping is by content checksum, **stopping and re-picking the same files is always
+safe**. That's the resume mechanism.
+
 ## Web app, auth and playback
 
 - **Where it lives:** Tailscale serve publishes Immich at `https://<host>:8443/` and this app at
@@ -329,6 +411,8 @@ sampled frame as its thumbnail.
 | `vsearch/textemb.py` | bge-m3 |
 | `vsearch/db.py` | schema, Immich config/schema checks, pooling, save + merge + reconcile |
 | `vsearch/search.py` | the three moment sources, thresholds, fusion |
-| `vsearch/web.py` | FastAPI routes, auth, prefix handling, playback proxy |
-| `vsearch/static/index.html` | the whole page (vanilla JS, mobile-first, light/dark) |
+| `vsearch/web.py` | FastAPI routes, auth, prefix handling, playback proxy, search-bar hook, pendrive progress |
+| `vsearch/immich_search.py` | which search-bar requests get merged, and the blend order |
+| `vsearch/static/index.html` | the whole page: Search + Pendrives tabs (vanilla JS, mobile-first, light/dark) |
+| `vsearch/static/upload.js` | streaming SHA-1, filename dates, media filter |
 | `vsearch/config.py` | every setting, from environment variables |

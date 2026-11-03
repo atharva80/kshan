@@ -56,6 +56,16 @@ def main():
         print("built", name)
     shutil.copy(src / "cat.jpg", out / "cat_photo.jpg")  # a plain photo, to check photos are untouched
     print("copied cat_photo.jpg")
+    # Distractors: crops of every photo, so the videos compete with a realistic number of
+    # similar-looking photos in Immich's search (and merged results can be compared).
+    (out / "distractors").mkdir(exist_ok=True)
+    crops = ["iw/2:ih/2:0:0", "iw/2:ih/2:iw/2:0", "iw/2:ih/2:0:ih/2", "iw/2:ih/2:iw/2:ih/2", "iw*0.7:ih*0.7:iw*0.15:ih*0.15"]
+    for image in ["cat", "dog", "beach", "fireworks", "lake", "food", "cake"]:
+        for i, crop in enumerate(crops):
+            subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src / f"{image}.jpg"),
+                            "-vf", f"crop={crop},scale=1024:-2", "-q:v", "3",
+                            str(out / "distractors" / f"photo_{image}_{i}.jpg")], check=True)
+    print("made 35 distractor photos")
 
 
 if __name__ == "__main__":

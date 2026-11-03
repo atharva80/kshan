@@ -169,13 +169,52 @@ with no other query getting worse. It held across thresholds 0.75–0.9
 **Why:** 8 GB of VRAM is better spent on SigLIP2 and Whisper. bge-m3 on CPU embeds a query in
 ~100 ms and a clip's segments in well under a second, and it stays loaded for search.
 
-### 14. How to test
+### 14. Making Immich's own search bar search inside videos
+
+**Options:**
+- Only the separate page.
+- Inject a script into Immich's web UI (doesn't reach the native apps, and breaks easily).
+- Patch the apps.
+- **Route the one search endpoint through vsearch.**
+
+**Picked:** `tailscale serve` sends `POST /api/search/smart` to vsearch, which calls Immich
+unchanged and blends in video moments.
+
+**Why:**
+- It works in the **native phone apps and the web** at once, with zero changes to Immich.
+- Responses keep Immich's exact shape, and anything unusual passes through byte for byte.
+- On the test library it took "make a wish" (spoken) from #7 to #1 and "a cat" (at 0:20) from #9 to #2.
+
+**Cost:**
+- It only applies through the tailnet address.
+- Search depends on the vsearch container being up.
+- The apps still open videos at 0:00. The companion page covers jumping to the moment.
+
+### 15. Pendrives with only a phone
+
+**Constraint:** the person has a phone and an iPad, no computer. The only computer is the
+server, 700 km away. The Immich app backs up the phone's gallery but can't read a USB drive,
+and immich-go needs a computer.
+
+**Picked:** a **Pendrives** tab on the companion page. The phone browser reads the files
+through the OTG adapter, hashes them locally (streaming SHA-1), asks Immich which it already
+has (`bulk-upload-check`), uploads the rest straight to Immich's API, and files them into a
+per-pendrive album. Progress is tracked server-side.
+
+**Why:**
+- No app to install.
+- Resuming is just picking the same files again (checksums, not bookkeeping).
+- Duplicates across pendrives are stored once.
+- Each pendrive is an Immich album, so sorting and later **downloading albums back onto
+  pendrives** use Immich's own features.
+
+### 16. How to test
 
 **Picked:** a throwaway Immich (own database and volumes) fed with generated videos whose
-contents are known per second. 41 automated checks cover the page, Immich's own search,
+contents are known per second. 50 automated checks cover the page, Immich's own search and search bar,
 precision, cross-language speech and resilience.
 
 **Why:** "it indexed without errors" proves nothing about search quality. Known ground truth
-does, and it caught six real bugs ([testing.md](testing.md#bugs-testing-caught-and-how-they-were-fixed)).
+does, and it caught a string of real bugs ([testing.md](testing.md#bugs-testing-caught-and-how-they-were-fixed)).
 Test photos come from Wikimedia Commons with attribution and are downloaded on demand, never
 committed.

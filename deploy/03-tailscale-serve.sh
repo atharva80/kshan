@@ -10,4 +10,6 @@ PORT="${IMMICH_HTTPS_PORT:-8443}"   # 443 is often taken by other serve configs;
 
 tailscale serve --bg --https="$PORT" http://127.0.0.1:2283
 tailscale serve --bg --https="$PORT" --set-path=/vsearch http://127.0.0.1:2284
+# Immich's own search bar (apps + web) -> vsearch, which asks Immich and blends in video moments
+tailscale serve --bg --https="$PORT" --set-path=/api/search/smart http://127.0.0.1:2284/hook/smart-search
 tailscale serve status

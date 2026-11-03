@@ -1,6 +1,8 @@
 """HTTP API and the search page. Auth rides on Immich: the user's Immich session cookie
 (same origin when served under Immich's address at /vsearch) or an Immich API key."""
+import asyncio
 import hashlib
+import json
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -9,11 +11,11 @@ from uuid import UUID
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from . import config, db, search
+from . import config, db, immich_search, search
 from .services import services
 
 log = logging.getLogger("vsearch.web")
@@ -56,8 +58,12 @@ app = StripPrefix(api)
 
 
 def _auth_headers(request: Request) -> dict | None:
+    """The caller's Immich credentials, in any of the forms Immich accepts."""
     if key := request.headers.get("x-api-key"):
         return {"x-api-key": key}
+    for name in ("x-immich-user-token", "x-immich-session-token"):  # Immich mobile apps
+        if token := request.headers.get(name):
+            return {name: token}
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
         return {"Authorization": auth}
@@ -107,6 +113,11 @@ async def health():
 @api.get("/")
 async def page():
     return FileResponse(STATIC / "index.html", headers=NO_CACHE)
+
+
+@api.get("/upload.js")
+async def upload_js():
+    return FileResponse(STATIC / "upload.js", media_type="text/javascript", headers=NO_CACHE)
 
 
 @api.get("/icon.svg")
@@ -201,6 +212,125 @@ async def play(asset_id: UUID, request: Request):
             await upstream.aclose()
 
     return StreamingResponse(body(), status_code=upstream.status_code, headers=passthrough)
+
+
+FORWARD_HEADERS = ("authorization", "cookie", "x-api-key", "x-immich-user-token", "x-immich-session-token",
+                   "x-immich-share-key", "x-immich-share-slug", "user-agent", "accept-language", "x-correlation-id")
+
+
+@api.post("/hook/smart-search")
+@api.post("/hook/smart-search/{rest:path}")
+async def immich_smart_search(request: Request, rest: str = ""):
+    """Stands in for Immich's POST /api/search/smart (routed here by tailscale serve):
+    asks Immich, then blends in video moments. Any problem -> Immich's answer untouched."""
+    raw = await request.body()
+    headers = {k: v for k, v in request.headers.items() if k.lower() in FORWARD_HEADERS}
+    headers["content-type"] = "application/json"
+    upstream = await immich.post("/api/search/smart", content=raw, headers=headers)
+    passthrough = Response(upstream.content, status_code=upstream.status_code,
+                           media_type=upstream.headers.get("content-type", "application/json"))
+    if upstream.status_code != 200:
+        return passthrough
+    try:
+        body = json.loads(raw or b"{}")
+        if not immich_search.mergeable(body) or _auth_headers(request) is None:
+            return passthrough
+        user = await current_user(request)
+        data = upstream.json()
+        items = data["assets"]["items"]
+        page = int(body.get("page") or 1)
+        size = int(body.get("size") or len(items) or 100)
+        ours = await run_in_threadpool(search.run, services.pool, services.ml, services.embedder,
+                                       user["id"], body["query"], search.KINDS, max(size, 40))
+        if not ours:
+            return passthrough
+        ours_ids = {r["assetId"] for r in ours}
+        if page > 1:
+            # Those videos were already moved up onto page 1; don't show them twice.
+            data["assets"]["items"] = [i for i in items if i["id"] not in ours_ids]
+        else:
+            by_id = {i["id"]: i for i in items}
+            missing = [r["assetId"] for r in ours if r["assetId"] not in by_id]
+            fetched = await asyncio.gather(*(immich.get(f"/api/assets/{a}", headers=user["headers"]) for a in missing))
+            by_id.update({r.json()["id"]: r.json() for r in fetched if r.status_code == 200})
+            order = [a for a in immich_search.blend(items, ours) if a in by_id]
+            data["assets"]["items"] = [by_id[a] for a in order]
+        data["assets"]["count"] = len(data["assets"]["items"])
+        return JSONResponse(data)
+    except Exception as e:  # never break Immich's own search
+        log.warning("smart search merge skipped: %r", e)
+        return passthrough
+
+
+class PendriveProgress(BaseModel):
+    name: str
+    album_id: UUID | None = None
+    files_total: int | None = None
+    uploaded: int | None = None
+    skipped: int | None = None
+    failed: int | None = None
+    bytes_total: int | None = None
+    bytes_done: int | None = None
+    status: str | None = None
+    last_error: str | None = None
+
+
+@api.get("/api/pendrives")
+async def list_pendrives(request: Request):
+    user = await current_user(request)
+
+    def rows():
+        with services.pool.connection() as conn:
+            return db.pendrives(conn, user["id"])
+
+    return {"pendrives": await run_in_threadpool(rows)}
+
+
+@api.post("/api/pendrives")
+async def pendrive_progress(body: PendriveProgress, request: Request):
+    user = await current_user(request)
+    name = " ".join(body.name.split())[:80]
+    if not name:
+        raise HTTPException(400, "Give the pendrive a name")
+    fields = body.model_dump(exclude_none=True, exclude={"name"})
+    if "album_id" in fields:
+        fields["album_id"] = str(fields["album_id"])
+
+    def save():
+        with services.pool.connection() as conn:
+            db.save_pendrive(conn, user["id"], name, fields)
+
+    await run_in_threadpool(save)
+    return {"ok": True}
+
+
+# The page talks to Immich's own API at /api/... (same origin under Tailscale serve). When the
+# page is opened directly on its own port instead, these few routes pass those calls through.
+IMMICH_PASSTHROUGH = ["/api/assets", "/api/assets/bulk-upload-check", "/api/albums", "/api/albums/{album_id}/assets",
+                      "/api/server/ping"]
+
+
+async def _to_immich(request: Request):
+    headers = {k: v for k, v in request.headers.items()
+               if k.lower() in FORWARD_HEADERS or k.lower() in ("content-type", "content-length")}
+    upstream = await immich.send(immich.build_request(
+        request.method, request.url.path, params=request.query_params, headers=headers,
+        content=request.stream()), stream=True)
+
+    async def body():
+        try:
+            async for chunk in upstream.aiter_raw():
+                yield chunk
+        finally:
+            await upstream.aclose()
+
+    keep = ("content-type", "content-length", "content-encoding")
+    return StreamingResponse(body(), status_code=upstream.status_code,
+                             headers={k: v for k, v in upstream.headers.items() if k.lower() in keep})
+
+
+for _path in IMMICH_PASSTHROUGH:
+    api.add_api_route(_path, _to_immich, methods=["GET", "POST", "PUT"], include_in_schema=False)
 
 
 class Album(BaseModel):

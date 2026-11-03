@@ -140,8 +140,19 @@ internet and without them using *your* Tailscale account.
 
 ```bash
 sudo bash vsearch/deploy/03-tailscale-serve.sh
-# https://<machine>.<tailnet>.ts.net:8443/          -> Immich
-# https://<machine>.<tailnet>.ts.net:8443/vsearch   -> video search
+# https://<machine>.<tailnet>.ts.net:8443/                   -> Immich
+# https://<machine>.<tailnet>.ts.net:8443/vsearch            -> the companion page
+# https://<machine>.<tailnet>.ts.net:8443/api/search/smart   -> vsearch, which asks Immich and
+#                                                               blends in video moments
+```
+
+The third route is what makes **Immich's own search bar** (apps and web) search inside videos.
+Check it's in place: a search request is answered by `server: uvicorn` (vsearch), while
+everything else is answered by Immich:
+
+```bash
+curl -s -D - -o /dev/null -X POST -H 'Content-Type: application/json' -d '{"query":"x"}' \
+  https://<machine>.<tailnet>.ts.net:8443/api/search/smart | grep -i '^server'
 ```
 
 Both get a valid HTTPS certificate from Tailscale. Port 8443 is used because 443 is often

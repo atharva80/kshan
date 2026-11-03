@@ -3,115 +3,223 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Video Search</title>
+<title>Immich Video Search</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#4250af">
 <style>
   :root {
-    --bg: #f6f7fb; --surface: #ffffff; --text: #1b1d24; --muted: #646a7a; --line: #e2e5ee;
-    --accent: #4250af; --accent-text: #ffffff; --chip: #eef0f8;
-    --seen: #2f7d5b; --said: #a1532a; --written: #6a43a8; --danger: #b3261e;
-    --radius: 14px; color-scheme: light;
+    --bg: #ffffff; --surface: #f6f6f4; --surface-2: #ececea; --text: #1b1b1f; --muted: #5f6368; --line: #e3e3e0;
+    --primary: #4250af; --on-primary: #ffffff; --primary-soft: #e8ebfa;
+    --seen: #1f7a52; --said: #a24a1c; --written: #6a43a8; --ok: #1f7a52; --warn: #9a6400; --danger: #b3261e;
+    --radius: 16px; color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #101217; --surface: #1a1d25; --text: #eceef4; --muted: #9aa1b2; --line: #2b2f3b;
-      --accent: #aab4ff; --accent-text: #11132a; --chip: #242836;
-      --seen: #7fd3ad; --said: #f0a679; --written: #c3a5f5; --danger: #f2b8b5; color-scheme: dark;
+      --bg: #000000; --surface: #191919; --surface-2: #232323; --text: #e8e8e8; --muted: #a0a0a0; --line: #2c2c2c;
+      --primary: #adcbfa; --on-primary: #0d1b3a; --primary-soft: #1c2840;
+      --seen: #7fd3ad; --said: #f0a679; --written: #c3a5f5; --ok: #7fd3ad; --warn: #f2c66d; --danger: #f2b8b5;
+      color-scheme: dark;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
-         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", sans-serif; }
-  main { max-width: 780px; margin: 0 auto; padding: max(16px, env(safe-area-inset-top)) 16px 48px; }
-  header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-  header h1 { font-size: 1.25rem; margin: 0; flex: 1; }
-  .who { color: var(--muted); font-size: .9rem; }
-  form.search { display: flex; gap: 8px; }
-  input[type=search], input[type=email], input[type=password] {
-    flex: 1; min-width: 0; font: inherit; padding: 12px 14px; border-radius: var(--radius);
-    border: 1px solid var(--line); background: var(--surface); color: var(--text); }
-  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+         font: 15px/1.45 "Overpass", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", sans-serif; }
+  a { color: var(--primary); }
   button { font: inherit; cursor: pointer; }
-  .primary { background: var(--accent); color: var(--accent-text); border: 0; border-radius: var(--radius);
-             padding: 0 18px; font-weight: 600; min-height: 46px; }
-  .chips { display: flex; gap: 8px; margin: 12px 0 4px; flex-wrap: wrap; }
-  .chip { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px;
-          padding: 6px 14px; font-size: .9rem; }
-  .chip[aria-pressed=true] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
-  .status { color: var(--muted); font-size: .85rem; margin: 8px 0 16px; min-height: 1.2em; }
-  .card { display: grid; grid-template-columns: 148px 1fr; gap: 12px; background: var(--surface);
-          border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; margin-bottom: 12px; }
-  .poster { position: relative; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: var(--chip);
-            aspect-ratio: 16/10; }
+  input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  /* top bar, like Immich's */
+  .bar { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line);
+         padding: max(10px, env(safe-area-inset-top)) 16px 0; }
+  .bar-row { max-width: 820px; margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 44px; }
+  .back { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: var(--text);
+          font-weight: 600; padding: 6px 10px 6px 4px; border-radius: 999px; }
+  .back:hover { background: var(--surface); }
+  .back svg { width: 20px; height: 20px; }
+  .brand { color: var(--primary); }
+  .who { margin-left: auto; color: var(--muted); font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabs { max-width: 820px; margin: 4px auto 0; display: flex; gap: 4px; }
+  .tab { border: 0; background: none; color: var(--muted); padding: 10px 14px; font-weight: 600; border-bottom: 3px solid transparent; }
+  .tab[aria-selected=true] { color: var(--primary); border-bottom-color: var(--primary); }
+
+  main { max-width: 820px; margin: 0 auto; padding: 16px 16px 64px; }
+  .hidden { display: none !important; }
+  .card { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 1.02rem; margin: 0 0 4px; }
+  .hint { color: var(--muted); font-size: .86rem; margin: 0 0 12px; }
+
+  /* search */
+  .searchbox { display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 999px; padding: 4px 6px 4px 16px; }
+  .searchbox svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
+  .searchbox input { flex: 1; min-width: 0; border: 0; background: none; color: var(--text); font: inherit; padding: 10px 0; outline: none; }
+  .pill { border: 0; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-weight: 600; padding: 9px 16px; }
+  .chips { display: flex; gap: 8px; margin: 12px 0 2px; overflow-x: auto; }
+  .chip { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 999px; padding: 6px 14px; font-size: .88rem; white-space: nowrap; }
+  .chip[aria-pressed=true] { background: var(--primary-soft); border-color: transparent; color: var(--primary); font-weight: 600; }
+  .status { color: var(--muted); font-size: .85rem; margin: 10px 2px 14px; min-height: 1.2em; }
+  .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .result { background: var(--surface); border-radius: var(--radius); overflow: hidden; }
+  .poster { position: relative; display: block; width: 100%; padding: 0; border: 0; background: var(--surface-2); aspect-ratio: 16/10; }
   .poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .dur { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.65); color: #fff;
-         font-size: .75rem; padding: 1px 6px; border-radius: 6px; }
-  .info { min-width: 0; }
-  .title { font-weight: 600; font-size: .95rem; overflow-wrap: anywhere; }
-  .sub { color: var(--muted); font-size: .8rem; margin-bottom: 6px; }
+  .dur { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.65); color: #fff; font-size: .75rem; padding: 1px 7px; border-radius: 6px; }
+  .play { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.65); color: #fff; font-size: .75rem; padding: 2px 8px; border-radius: 6px; }
+  .rbody { padding: 10px 12px 12px; }
+  .title { font-weight: 600; font-size: .9rem; overflow-wrap: anywhere; }
+  .sub { color: var(--muted); font-size: .78rem; margin-bottom: 8px; }
+  .timeline { position: relative; height: 6px; background: var(--surface-2); border-radius: 3px; margin: 2px 0 10px; }
+  .tick { position: absolute; top: -2px; width: 4px; height: 10px; border-radius: 2px; transform: translateX(-2px); }
+  .tick.visual { background: var(--seen); } .tick.speech { background: var(--said); } .tick.text { background: var(--written); }
   .moments { display: flex; flex-wrap: wrap; gap: 6px; }
   .moment { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; border: 0; border-radius: 10px;
-            background: var(--chip); color: var(--text); padding: 5px 9px; font-size: .82rem; text-align: left; }
+            background: var(--bg); color: var(--text); padding: 5px 9px; font-size: .8rem; text-align: left; }
   .moment b { font-variant-numeric: tabular-nums; }
-  .moment span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; color: var(--muted); }
-  .k { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .moment span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 20ch; color: var(--muted); }
+  .k { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
   .k.visual { color: var(--seen); } .k.speech { color: var(--said); } .k.text { color: var(--written); }
-  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
-  .actions { display: flex; justify-content: center; margin-top: 8px; }
-  .ghost { background: transparent; border: 1px solid var(--line); color: var(--text); border-radius: var(--radius);
-           padding: 10px 16px; }
+  .empty { text-align: center; color: var(--muted); padding: 36px 0; }
+  .center { display: flex; justify-content: center; margin-top: 14px; }
+  .ghost { background: transparent; border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 9px 16px; }
+  .tip { background: var(--primary-soft); color: var(--text); border-radius: 12px; padding: 10px 12px; font-size: .86rem; margin-top: 12px; }
+
+  /* player */
   dialog { border: 0; padding: 0; border-radius: var(--radius); background: var(--surface); color: var(--text);
-           width: min(780px, calc(100vw - 24px)); max-height: calc(100vh - 24px); }
-  dialog::backdrop { background: rgba(0,0,0,.7); }
-  dialog video { width: 100%; max-height: 60vh; background: #000; display: block; }
+           width: min(820px, calc(100vw - 16px)); max-height: calc(100vh - 16px); }
+  dialog::backdrop { background: rgba(0,0,0,.8); }
+  dialog video { width: 100%; max-height: 62vh; background: #000; display: block; }
   .dialog-body { padding: 12px 14px 16px; }
   .dialog-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .dialog-top .title { flex: 1; }
-  .dialog-top a { color: var(--accent); font-size: .9rem; white-space: nowrap; }
-  .close { background: var(--chip); border: 0; border-radius: 10px; padding: 6px 10px; color: var(--text); }
-  .login { max-width: 380px; margin: 40px auto; background: var(--surface); border: 1px solid var(--line);
-           border-radius: var(--radius); padding: 20px; display: grid; gap: 10px; }
-  .login p { margin: 0 0 6px; color: var(--muted); font-size: .9rem; }
+  .icon-btn { background: var(--surface-2); border: 0; border-radius: 999px; width: 34px; height: 34px; color: var(--text); }
+
+  /* pendrives */
+  label.field { display: block; font-size: .85rem; font-weight: 600; margin-bottom: 6px; }
+  input.text { width: 100%; font: inherit; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .big { flex: 1 1 200px; border: 0; border-radius: 14px; padding: 14px; font-weight: 600; background: var(--primary); color: var(--on-primary); }
+  .big.secondary { background: var(--bg); color: var(--primary); border: 1px solid var(--line); }
+  .big:disabled { opacity: .5; cursor: default; }
+  .picked { margin-top: 12px; font-size: .9rem; }
+  .progress { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; margin: 12px 0 8px; }
+  .progress > div { height: 100%; width: 0; background: var(--primary); transition: width .4s; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+  .stat { background: var(--bg); border-radius: 12px; padding: 8px 10px; }
+  .stat b { display: block; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+  .stat small { color: var(--muted); font-size: .74rem; }
+  .now { color: var(--muted); font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drives { display: grid; gap: 8px; }
+  .drive { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; background: var(--bg); border-radius: 12px; padding: 10px 12px; }
+  .drive .name { font-weight: 600; }
+  .drive .meta { color: var(--muted); font-size: .8rem; grid-column: 1 / -1; }
+  .badge { font-size: .72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; align-self: start; }
+  .badge.done { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+  .badge.progress { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .badge.failed { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+  ol.steps { margin: 0; padding-left: 20px; font-size: .9rem; } ol.steps li { margin: 4px 0; }
+
+  .login { max-width: 400px; margin: 48px auto; display: grid; gap: 10px; }
   .error { color: var(--danger); font-size: .9rem; min-height: 1.2em; }
-  .hidden { display: none !important; }
-  @media (max-width: 520px) {
-    .card { grid-template-columns: 1fr; }
-    .poster { aspect-ratio: 16/9; }
-  }
+  @media (max-width: 520px) { .stats { grid-template-columns: repeat(2, 1fr); } .results { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>Video Search</h1>
+<header class="bar">
+  <div class="bar-row">
+    <a class="back" id="back" href="/" title="Back to Immich">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+      <span class="brand">Immich</span>
+    </a>
     <span class="who" id="who"></span>
-  </header>
+  </div>
+  <nav class="tabs hidden" id="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="search" aria-selected="true">Find in videos</button>
+    <button class="tab" role="tab" data-tab="pendrives" aria-selected="false">Pendrives</button>
+  </nav>
+</header>
 
-  <form class="login hidden" id="login">
-    <strong>Log in with your Immich account</strong>
-    <p>Same email and password as the Immich app.</p>
-    <input type="email" id="email" placeholder="Email" autocomplete="username" required>
-    <input type="password" id="password" placeholder="Password" autocomplete="current-password" required>
+<main>
+  <form class="card login hidden" id="login">
+    <h2>Log in with your Immich account</h2>
+    <p class="hint">Same email and password as the Immich app.</p>
+    <input class="text" type="email" id="email" placeholder="Email" autocomplete="username" required>
+    <input class="text" type="password" id="password" placeholder="Password" autocomplete="current-password" required>
     <div class="error" id="login-error"></div>
-    <button class="primary" type="submit">Log in</button>
+    <button class="big" type="submit">Log in</button>
   </form>
 
-  <section id="app" class="hidden">
-    <form class="search" id="search">
-      <input type="search" id="q" placeholder="cat on the bed, happy birthday, Goa…" autocomplete="off" enterkeyhint="search">
-      <button class="primary" type="submit">Search</button>
+  <!-- SEARCH -->
+  <section id="tab-search" class="hidden">
+    <form class="searchbox" id="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" id="q" placeholder="Search inside videos: cat, happy birthday, Goa…" autocomplete="off" enterkeyhint="search">
+      <button class="pill" type="submit">Search</button>
     </form>
     <div class="chips" role="group" aria-label="Search in">
       <button type="button" class="chip" data-kind="all" aria-pressed="true">Everything</button>
-      <button type="button" class="chip" data-kind="visual" aria-pressed="false">On screen</button>
+      <button type="button" class="chip" data-kind="visual" aria-pressed="false">Seen</button>
       <button type="button" class="chip" data-kind="speech" aria-pressed="false">Said</button>
       <button type="button" class="chip" data-kind="text" aria-pressed="false">Written</button>
     </div>
     <div class="status" id="status"></div>
-    <div id="results"></div>
-    <div class="actions hidden" id="album-row"><button class="ghost" id="album">Save these videos as an Immich album</button></div>
+    <div class="results" id="results"></div>
+    <div class="center hidden" id="album-row"><button class="ghost" id="album">Save these videos as an Immich album</button></div>
+    <div class="tip" id="search-tip">Tip: Immich's own search bar does this too: it finds videos by anything seen, said or written in them. This page adds the exact moment.</div>
+  </section>
+
+  <!-- PENDRIVES -->
+  <section id="tab-pendrives" class="hidden">
+    <div class="card" id="upload-card">
+      <h2>Upload a pendrive</h2>
+      <p class="hint">Plug the pendrive into your phone, give it a name, pick everything on it. It all goes into its own album. Already-uploaded files are skipped automatically, so it's safe to stop and start again.</p>
+      <label class="field" for="pd-name">Pendrive name</label>
+      <input class="text" id="pd-name" list="pd-names" placeholder="e.g. Blue 64GB, Sandisk 32GB" maxlength="60" autocomplete="off">
+      <datalist id="pd-names"></datalist>
+      <div class="row">
+        <button class="big" type="button" id="pick-files">Choose photos &amp; videos</button>
+        <button class="big secondary hidden" type="button" id="pick-folder">Choose a whole folder</button>
+      </div>
+      <input type="file" id="files" multiple accept="image/*,video/*,.heic,.heif,.mts,.m2ts,.3gp,.mkv,.avi" class="hidden">
+      <input type="file" id="folder" multiple webkitdirectory class="hidden">
+      <div class="picked hidden" id="picked"></div>
+      <div class="row hidden" id="start-row">
+        <button class="big" type="button" id="start">Start upload</button>
+      </div>
+      <p class="hint" style="margin-top:12px">In the file picker: open the pendrive (USB drive), go into a folder, then <b>⋮ → Select all</b>. Do one folder at a time if it has many folders.</p>
+    </div>
+
+    <div class="card hidden" id="run-card">
+      <h2 id="run-title">Uploading</h2>
+      <div class="progress"><div id="bar"></div></div>
+      <div class="hint" id="run-line"></div>
+      <div class="stats">
+        <div class="stat"><b id="n-up">0</b><small>uploaded</small></div>
+        <div class="stat"><b id="n-skip">0</b><small>already in Immich</small></div>
+        <div class="stat"><b id="n-fail">0</b><small>failed</small></div>
+        <div class="stat"><b id="n-left">0</b><small>left</small></div>
+      </div>
+      <div class="now" id="now"></div>
+      <div class="tip" id="run-tip">Keep this page open with the phone charging. The screen stays on by itself. If anything stops it, pick the same files again: nothing gets uploaded twice.</div>
+      <div class="row">
+        <button class="big secondary" type="button" id="stop">Stop</button>
+        <button class="big hidden" type="button" id="retry">Retry failed</button>
+        <a class="big hidden" id="open-album" style="text-align:center;text-decoration:none">Open the album</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Your pendrives</h2>
+      <div class="drives" id="drives"><p class="hint">None yet.</p></div>
+    </div>
+
+    <div class="card">
+      <h2>After everything is uploaded</h2>
+      <ol class="steps">
+        <li><b>Sort:</b> in Immich, long-press photos to select them → <b>+</b> → <b>Add to album</b>. Make as many albums as you like.</li>
+        <li><b>Find:</b> Immich's search finds people, places, things, and words said or written in videos.</li>
+        <li><b>Copy back to a pendrive:</b> open an album → <b>⋮ → Download</b>. Big albums download in parts. Then move the files to the pendrive with your phone's Files app.</li>
+        <li><b>Don't delete originals</b> until the server has a backup.</li>
+      </ol>
+    </div>
   </section>
 </main>
 
@@ -121,20 +229,24 @@
     <div class="dialog-top">
       <div class="title" id="player-title"></div>
       <a id="open-immich" target="_blank" rel="noopener">Open in Immich</a>
-      <button class="close" id="close" aria-label="Close">✕</button>
+      <button class="icon-btn" id="close" aria-label="Close">✕</button>
     </div>
     <div class="moments" id="player-moments"></div>
   </div>
 </dialog>
 
-<script>
-// Works both at https://<immich>/vsearch/ and directly on its own port.
+<script type="module">
+import { sha1File, dateFromName, MEDIA } from './upload.js';
+
+// The page lives at <immich>/vsearch/ (same origin as Immich) or on its own port for testing.
 const base = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
-if (!location.pathname.endsWith('/')) history.replaceState(null, '', base + location.search);
+if (!location.pathname.endsWith('/')) history.replaceState(null, '', base + location.search + location.hash);
 const $ = (id) => document.getElementById(id);
-const api = (path, opts = {}) => fetch(base + 'api/' + path, { credentials: 'same-origin', ...opts });
+const ours = (path, opts = {}) => fetch(base + 'api/' + path, { credentials: 'same-origin', ...opts });
+const immich = (path, opts = {}) => fetch('/api/' + path, { credentials: 'same-origin', ...opts });
+const json = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const LABEL = { visual: 'Seen', speech: 'Said', text: 'Written' };
-let kind = 'all', immichUrl = '', lastResults = [], lastQuery = '', statusTimer = null;
+let immichUrl = '', kind = 'all', lastResults = [], lastQuery = '';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clock = (ms) => {
@@ -142,57 +254,61 @@ const clock = (ms) => {
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(r).padStart(2, '0');
 };
 const when = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
-const frameUrl = (id, ms) => ms == null ? '' : `${base}api/frame/${id}/${ms}.webp`;
+const gb = (b) => b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : (b / 1e6).toFixed(b >= 1e8 ? 0 : 1) + ' MB';
+const num = (n) => n.toLocaleString();
 
+// ---------- start / login / tabs ----------
 async function start() {
-  const res = await api('me');
+  const res = await ours('me');
   if (res.status === 401) return showLogin();
   const me = await res.json();
   immichUrl = me.immichUrl || '';
+  $('back').href = (immichUrl || '') + '/';
   $('who').textContent = me.name || '';
   $('login').classList.add('hidden');
-  $('app').classList.remove('hidden');
+  $('tabs').classList.remove('hidden');
+  showTab(location.hash === '#pendrives' ? 'pendrives' : 'search');
   refreshStatus();
-  $('q').focus();
+  loadDrives();
 }
-
 function showLogin() {
-  $('app').classList.add('hidden');
+  for (const id of ['tabs', 'tab-search', 'tab-pendrives']) $(id).classList.add('hidden');
   $('login').classList.remove('hidden');
   $('email').focus();
 }
-
 $('login').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('login-error').textContent = '';
-  const res = await api('login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
+  const res = await ours('login', json({ email: $('email').value, password: $('password').value }));
   if (!res.ok) { $('login-error').textContent = 'Wrong email or password.'; return; }
   $('password').value = '';
   start();
 });
-
-async function refreshStatus() {
-  clearTimeout(statusTimer);
-  const res = await api('status');
-  if (!res.ok) return;
-  const s = await res.json();
-  if (!lastQuery) {
-    let text = s.videos === 0 ? 'No videos yet. Anything you upload to Immich gets indexed automatically.'
-      : `${s.indexed} of ${s.videos} videos indexed`;
-    if (s.pending > 0) text += ` · ${s.pending} in progress`;
-    if (s.failed > 0) text += ` · ${s.failed} couldn't be read`;
-    $('status').textContent = text;
-  }
-  if (s.pending > 0) statusTimer = setTimeout(refreshStatus, 15000);
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+  $('tab-search').classList.toggle('hidden', name !== 'search');
+  $('tab-pendrives').classList.toggle('hidden', name !== 'pendrives');
+  history.replaceState(null, '', base + (name === 'pendrives' ? '#pendrives' : ''));
+  if (name === 'search') $('q').focus();
 }
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
 
+// ---------- search ----------
+async function refreshStatus() {
+  const res = await ours('status');
+  if (!res.ok || lastQuery) return;
+  const s = await res.json();
+  let text = s.videos === 0 ? 'No videos yet. Everything uploaded to Immich gets indexed automatically.'
+    : `${num(s.indexed)} of ${num(s.videos)} videos searchable`;
+  if (s.pending > 0) text += ` · ${num(s.pending)} being processed`;
+  $('status').textContent = text;
+  if (s.pending > 0) setTimeout(refreshStatus, 20000);
+}
 document.querySelectorAll('.chip').forEach((chip) => chip.addEventListener('click', () => {
   kind = chip.dataset.kind;
   document.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
   if ($('q').value.trim()) runSearch();
 }));
-
 $('search').addEventListener('submit', (e) => { e.preventDefault(); runSearch(); });
 
 async function runSearch() {
@@ -200,79 +316,293 @@ async function runSearch() {
   if (!q) return;
   lastQuery = q;
   $('status').textContent = 'Searching…';
-  const res = await api(`search?q=${encodeURIComponent(q)}&kind=${kind}`);
+  const res = await ours(`search?q=${encodeURIComponent(q)}&kind=${kind}`);
   if (res.status === 401) return showLogin();
   if (!res.ok) { $('status').textContent = 'Search failed. Try again in a moment.'; return; }
   const data = await res.json();
   lastResults = data.results;
-  $('status').textContent = data.results.length
-    ? `${data.results.length} video${data.results.length === 1 ? '' : 's'} · ${data.took_ms} ms`
-    : '';
+  $('status').textContent = data.results.length ? `${data.results.length} video${data.results.length === 1 ? '' : 's'}` : '';
+  $('search-tip').classList.add('hidden');
   render(data.results);
 }
-
+const frameUrl = (id, ms) => ms == null ? '' : `${base}api/frame/${id}/${ms}.webp`;
 function momentButton(r, m) {
-  const snippet = m.text ? `<span>${esc(m.text)}</span>` : '';
-  return `<button class="moment" data-id="${r.assetId}" data-ms="${m.ms}">
-    <span class="k ${m.kind}">${LABEL[m.kind]}</span><b>${clock(m.ms)}</b>${snippet}</button>`;
+  return `<button class="moment" data-id="${r.assetId}" data-ms="${m.ms}"><span class="k ${m.kind}">${LABEL[m.kind]}</span><b>${clock(m.ms)}</b>${m.text ? `<span>${esc(m.text)}</span>` : ''}</button>`;
 }
-
 function render(results) {
   $('album-row').classList.toggle('hidden', results.length === 0);
-  if (!results.length) {
-    $('results').innerHTML = `<div class="empty">Nothing found for “${esc(lastQuery)}”.</div>`;
-    return;
-  }
-  $('results').innerHTML = results.map((r) => `
-    <article class="card">
+  if (!results.length) { $('results').innerHTML = `<div class="empty">Nothing found for “${esc(lastQuery)}”.</div>`; return; }
+  $('results').innerHTML = results.map((r) => {
+    const total = (r.duration || 0) * 1000 || Math.max(...r.moments.map((m) => m.ms)) + 1000;
+    const ticks = r.moments.map((m) => `<span class="tick ${m.kind}" style="left:${Math.min(100, (m.ms / total) * 100)}%"></span>`).join('');
+    return `<article class="result">
       <button class="poster" data-id="${r.assetId}" data-ms="${r.best.ms}" aria-label="Play from ${clock(r.best.ms)}">
         <img src="${frameUrl(r.assetId, r.best.frameMs)}" alt="" loading="lazy">
+        <span class="play">▶ ${clock(r.best.ms)}</span>
         ${r.duration ? `<span class="dur">${clock(r.duration * 1000)}</span>` : ''}
       </button>
-      <div class="info">
+      <div class="rbody">
         <div class="title">${esc(r.fileName)}</div>
         <div class="sub">${when(r.takenAt)}</div>
+        <div class="timeline" aria-hidden="true">${ticks}</div>
         <div class="moments">${r.moments.map((m) => momentButton(r, m)).join('')}</div>
-      </div>
-    </article>`).join('');
+      </div></article>`;
+  }).join('');
 }
-
-$('results').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-ms]');
-  if (btn) openPlayer(btn.dataset.id, Number(btn.dataset.ms));
-});
-
+$('results').addEventListener('click', (e) => { const b = e.target.closest('[data-ms]'); if (b) openPlayer(b.dataset.id, +b.dataset.ms); });
 function openPlayer(id, ms) {
-  const r = lastResults.find((x) => x.assetId === id);
-  const video = $('video');
+  const r = lastResults.find((x) => x.assetId === id), video = $('video');
   $('player-title').textContent = r ? r.fileName : '';
   $('open-immich').href = `${immichUrl}/photos/${id}`;
   $('player-moments').innerHTML = r ? r.moments.map((m) => momentButton(r, m)).join('') : '';
   const seek = () => { video.currentTime = ms / 1000; video.play().catch(() => {}); };
   if (video.dataset.id === id && video.readyState > 0) seek();
-  else {
-    video.dataset.id = id;
-    video.src = `${base}api/play/${id}`;
-    video.addEventListener('loadedmetadata', seek, { once: true });
-  }
+  else { video.dataset.id = id; video.src = `${base}api/play/${id}`; video.addEventListener('loadedmetadata', seek, { once: true }); }
   if (!$('player').open) $('player').showModal();
 }
-
-$('player-moments').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-ms]');
-  if (btn) openPlayer(btn.dataset.id, Number(btn.dataset.ms));
-});
+$('player-moments').addEventListener('click', (e) => { const b = e.target.closest('[data-ms]'); if (b) openPlayer(b.dataset.id, +b.dataset.ms); });
 $('close').addEventListener('click', () => $('player').close());
 $('player').addEventListener('close', () => $('video').pause());
-
 $('album').addEventListener('click', async () => {
-  const btn = $('album');
-  btn.disabled = true;
-  const res = await api('album', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: `Search: ${lastQuery}`, assetIds: lastResults.map((r) => r.assetId) }) });
+  const btn = $('album'); btn.disabled = true;
+  const res = await ours('album', json({ name: `Search: ${lastQuery}`, assetIds: lastResults.map((r) => r.assetId) }));
   btn.textContent = res.ok ? `Saved as album “Search: ${lastQuery}”` : 'Could not create the album';
   setTimeout(() => { btn.disabled = false; btn.textContent = 'Save these videos as an Immich album'; }, 4000);
 });
+
+// ---------- pendrives ----------
+let picked = [], run = null, wakeLock = null;
+const folderInput = $('folder');
+if ('webkitdirectory' in folderInput && !/iPhone|iPad|iPod/.test(navigator.userAgent)) $('pick-folder').classList.remove('hidden');
+$('pick-files').addEventListener('click', () => $('files').click());
+$('pick-folder').addEventListener('click', () => folderInput.click());
+for (const input of [$('files'), folderInput]) input.addEventListener('change', () => { addPicked(input.files); input.value = ''; });
+
+function addPicked(fileList) {
+  const seen = new Set(picked.map((f) => f.name + '|' + f.size + '|' + f.lastModified));
+  for (const f of fileList) {
+    const key = f.name + '|' + f.size + '|' + f.lastModified;
+    if ((MEDIA.test(f.name) || /^(image|video)\//.test(f.type)) && !seen.has(key)) { picked.push(f); seen.add(key); }
+  }
+  const bytes = picked.reduce((s, f) => s + f.size, 0);
+  $('picked').classList.toggle('hidden', !picked.length);
+  $('start-row').classList.toggle('hidden', !picked.length);
+  $('picked').innerHTML = `<b>${num(picked.length)}</b> photos/videos picked · ${gb(bytes)} &nbsp;<button class="ghost" id="clear" type="button">Clear</button>
+    <div class="hint" style="margin:6px 0 0">You can pick more folders before starting; they're added to this list.</div>`;
+  $('clear').onclick = () => { picked = []; addPicked([]); };
+}
+
+async function keepAwake() {
+  try { if ('wakeLock' in navigator && document.visibilityState === 'visible' && run?.active) wakeLock = await navigator.wakeLock.request('screen'); } catch {}
+}
+document.addEventListener('visibilitychange', keepAwake);
+
+async function ensureAlbum(name) {
+  const albumName = `Pendrive - ${name}`;
+  const list = await immich('albums');
+  if (list.status === 401) throw new Error('login');
+  const found = (await list.json()).find((a) => a.albumName === albumName);
+  if (found) return found.id;
+  const res = await immich('albums', json({ albumName, description: `Everything uploaded from the pendrive "${name}".` }));
+  if (!res.ok) throw new Error(`could not create the album (${res.status})`);
+  return (await res.json()).id;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function waitOnline() {
+  for (let i = 0; ; i++) {
+    try { if ((await immich('server/ping')).ok) return; } catch {}
+    setLine(`Can't reach the server. Is Tailscale on? Retrying… (${i + 1})`);
+    await sleep(Math.min(60000, 5000 * (i + 1)));
+  }
+}
+
+function uploadOne(file) {
+  return new Promise((resolve, reject) => {
+    const created = dateFromName(file.name) ?? new Date(file.lastModified || Date.now());
+    const form = new FormData();
+    form.append('assetData', file, file.name);
+    form.append('fileCreatedAt', created.toISOString());
+    form.append('fileModifiedAt', new Date(file.lastModified || Date.now()).toISOString());
+    form.append('filename', file.name);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/assets');
+    xhr.withCredentials = true;
+    let last = 0;
+    // progress counts form overhead too, so scale it to the file's own size
+    xhr.upload.onprogress = (e) => {
+      const sent = e.total ? (e.loaded / e.total) * file.size : 0;
+      run.bytesDone += sent - last; last = sent; paint();
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200 || xhr.status === 201) { run.bytesDone += file.size - last; resolve(JSON.parse(xhr.responseText)); }
+      else { run.bytesDone -= last; reject(Object.assign(new Error(`HTTP ${xhr.status}`), { status: xhr.status })); }
+    };
+    xhr.onerror = () => { run.bytesDone -= last; reject(new Error('network')); };
+    run.xhrs.add(xhr);
+    xhr.onloadend = () => run.xhrs.delete(xhr);
+    xhr.send(form);
+  });
+}
+
+async function uploadWithRetry(item) {
+  for (let attempt = 0; attempt < 5 && run.active; attempt++) {
+    try { return await uploadOne(item.file); }
+    catch (e) {
+      if (e.status === 401) throw e;
+      if (e.status && e.status < 500 && e.status !== 408 && e.status !== 429) throw e;  // e.g. unsupported file
+      await waitOnline();
+      await sleep([2000, 8000, 30000, 60000, 60000][attempt]);
+    }
+  }
+  throw new Error('stopped');
+}
+
+async function addToAlbum(ids) {
+  for (let i = 0; i < ids.length; i += 200) {
+    await immich(`albums/${run.albumId}/assets`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids.slice(i, i + 200) }) });
+  }
+}
+
+async function startRun(items) {
+  const name = $('pd-name').value.trim().split(/\s+/).join(' ');
+  if (!name) { $('pd-name').focus(); $('pd-name').placeholder = 'Give this pendrive a name first'; return; }
+  run = { name, items, active: true, up: 0, skip: 0, fail: 0, bytesTotal: items.reduce((s, i) => s + i.file.size, 0),
+          bytesDone: 0, hashBytes: 0, started: Date.now(), xhrs: new Set(), pendingAlbum: [], failed: [] };
+  $('run-card').classList.remove('hidden'); $('upload-card').classList.add('hidden');
+  $('retry').classList.add('hidden'); $('open-album').classList.add('hidden'); $('stop').classList.remove('hidden');
+  $('run-tip').classList.remove('hidden');
+  $('run-title').textContent = `Uploading “${name}”`;
+  $('run-card').scrollIntoView({ behavior: 'smooth' });
+  await keepAwake();
+  try {
+    await waitOnline();
+    run.albumId = await ensureAlbum(name);
+    await report('in progress');
+    const queue = [];
+    let hashing = true;
+    // Fingerprint in batches, ask Immich which it already has, upload the rest (2 at a time).
+    const hasher = (async () => {
+      for (let i = 0; i < items.length && run.active; i += 20) {
+        const batch = items.slice(i, i + 20);
+        for (const item of batch) {
+          if (!run.active) break;
+          setNow(`Checking ${item.file.name}`);
+          item.checksum = await sha1File(item.file, (n) => { run.hashBytes += n; });
+        }
+        await waitOnline();
+        const check = batch.map((x, j) => ({ id: String(i + j), checksum: x.checksum })).filter((x) => x.checksum);
+        if (!check.length) continue;
+        const res = await immich('assets/bulk-upload-check', json({ assets: check }));
+        if (res.status === 401) throw Object.assign(new Error('login'), { status: 401 });
+        const results = (await res.json()).results || [];
+        for (const r of results) {
+          const item = items[+r.id];
+          if (r.action === 'reject' && r.assetId) { item.assetId = r.assetId; run.skip++; run.bytesDone += item.file.size; run.pendingAlbum.push(r.assetId); }
+          else if (r.action === 'reject') { run.fail++; item.error = r.reason || 'rejected'; run.failed.push(item); }
+          else queue.push(item);
+        }
+        paint();
+      }
+      hashing = false;
+    })();
+    const worker = async () => {
+      while (run.active && (hashing || queue.length)) {
+        const item = queue.shift();
+        if (!item) { await sleep(300); continue; }
+        setNow(`Uploading ${item.file.name}`);
+        try {
+          const res = await uploadWithRetry(item);
+          item.assetId = res.id;
+          res.status === 'duplicate' ? run.skip++ : run.up++;
+          run.pendingAlbum.push(res.id);
+        } catch (e) {
+          if (e.status === 401) { run.active = false; showLogin(); return; }
+          if (!run.active) return;
+          run.fail++; item.error = e.message; run.failed.push(item); run.bytesDone += item.file.size;
+        }
+        if (run.pendingAlbum.length >= 50) await addToAlbum(run.pendingAlbum.splice(0));
+        paint();
+      }
+    };
+    const ticker = setInterval(() => report('in progress'), 10000);
+    await Promise.all([hasher, worker(), worker()]);
+    clearInterval(ticker);
+    await addToAlbum(run.pendingAlbum.splice(0));
+    await finish(run.active ? (run.fail ? 'done with errors' : 'done') : 'stopped');
+  } catch (e) {
+    if (e.status === 401 || e.message === 'login') { showLogin(); return; }
+    setLine(`Stopped: ${e.message}`);
+    await report('stopped', e.message);
+  } finally {
+    try { await wakeLock?.release(); } catch {}
+    loadDrives();
+  }
+}
+
+async function report(status, error) {
+  if (!run) return;
+  try {
+    await ours('pendrives', json({ name: run.name, album_id: run.albumId, files_total: run.items.length, uploaded: run.up,
+      skipped: run.skip, failed: run.fail, bytes_total: run.bytesTotal, bytes_done: Math.round(run.bytesDone), status, last_error: error ?? null }));
+  } catch {}
+}
+
+async function finish(status) {
+  run.active = false;
+  await report(status);
+  $('stop').classList.add('hidden');
+  $('run-tip').classList.add('hidden');
+  $('run-title').textContent = status === 'done' ? `“${run.name}” is done ✓` : status === 'stopped' ? `“${run.name}” stopped` : `“${run.name}” finished, ${run.fail} failed`;
+  setNow(status === 'stopped' ? 'Pick the same files again to carry on: nothing gets uploaded twice.' : '');
+  $('retry').classList.toggle('hidden', !run.failed.length);
+  $('open-album').classList.remove('hidden');
+  $('open-album').href = `${immichUrl}/albums/${run.albumId}`;
+  paint();
+  picked = []; addPicked([]);
+  $('upload-card').classList.remove('hidden');
+}
+
+function paint() {
+  if (!run) return;
+  const left = run.items.length - run.up - run.skip - run.fail;
+  $('n-up').textContent = num(run.up); $('n-skip').textContent = num(run.skip);
+  $('n-fail').textContent = num(run.fail); $('n-left').textContent = num(Math.max(0, left));
+  const pct = run.bytesTotal ? Math.min(100, (run.bytesDone / run.bytesTotal) * 100) : 100;
+  $('bar').style.width = pct.toFixed(1) + '%';
+  const secs = (Date.now() - run.started) / 1000, rate = run.bytesDone / Math.max(secs, 1);
+  const eta = rate > 0 && left > 0 ? Math.round((run.bytesTotal - run.bytesDone) / rate) : 0;
+  setLine(`${pct.toFixed(0)}% · ${gb(run.bytesDone)} of ${gb(run.bytesTotal)}` +
+          (rate > 0 && left > 0 ? ` · ${gb(rate)}/s · about ${eta > 3600 ? Math.round(eta / 360) / 10 + ' h' : Math.max(1, Math.round(eta / 60)) + ' min'} left` : ''));
+}
+const setLine = (t) => { $('run-line').textContent = t; };
+const setNow = (t) => { $('now').textContent = t; };
+
+$('start').addEventListener('click', () => startRun(picked.map((file) => ({ file }))));
+$('stop').addEventListener('click', async () => {
+  if (!run) return;
+  run.active = false; run.xhrs.forEach((x) => x.abort());
+  await addToAlbum(run.pendingAlbum.splice(0));
+  await finish('stopped'); loadDrives();
+});
+$('retry').addEventListener('click', () => { const again = run.failed.map((i) => ({ file: i.file })); $('pd-name').value = run.name; startRun(again); });
+window.addEventListener('beforeunload', (e) => { if (run?.active) { e.preventDefault(); e.returnValue = ''; } });
+
+async function loadDrives() {
+  const res = await ours('pendrives');
+  if (!res.ok) return;
+  const { pendrives } = await res.json();
+  $('pd-names').innerHTML = pendrives.map((p) => `<option value="${esc(p.name)}">`).join('');
+  if (!pendrives.length) { $('drives').innerHTML = '<p class="hint">None yet.</p>'; return; }
+  $('drives').innerHTML = pendrives.map((p) => {
+    const cls = p.status === 'done' ? 'done' : p.status === 'in progress' ? 'progress' : 'failed';
+    const label = p.status === 'in progress' && Date.now() - new Date(p.updated_at) > 120000 ? 'paused' : p.status;
+    const album = p.album_id ? `<a href="${immichUrl}/albums/${p.album_id}"><b>${num(p.in_album)}</b> photos &amp; videos in its album</a>` : '';
+    return `<div class="drive"><span class="name">${esc(p.name)}</span><span class="badge ${cls}">${esc(label)}</span>
+      <span class="meta">${album}<br>Last run ${new Date(p.updated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}:
+      ${num(p.files_total)} picked · ${num(p.uploaded)} new · ${num(p.skipped)} already in Immich${p.failed ? ` · <b>${num(p.failed)} failed</b>` : ''}</span></div>`;
+  }).join('');
+}
 
 start();
 </script>

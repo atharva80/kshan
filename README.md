@@ -2,8 +2,9 @@
 
 **Find the moment, not just the video.** Search inside your [Immich](https://immich.app) videos by
 what's **on screen**, what's **said** (Hindi, Marathi, English and ~95 other languages), and
-what's **written**. The results show up in the normal Immich app, and a companion search page
-jumps straight to the right second.
+what's **written**. It works **right in Immich's own search bar**, in the phone apps and on the web.
+A companion page jumps to the exact second, and also lets someone with **only a phone**
+upload whole pendrives, each tracked and in its own album.
 
 <p align="center">
   <img src="docs/img/player.jpg" width="560" alt="Video search page playing a clip from the matched moment, with Seen and Said moment chips">
@@ -43,17 +44,20 @@ cloud and no new app for the person using it. Access over the internet had to st
 
 ```mermaid
 flowchart LR
-    phone["Phone / iPad<br/>Immich app"] -- "Tailscale<br/>(private)" --> immich
+    phone["Phone / iPad<br/>Immich app + browser"] -- "Tailscale (private)" --> ts{{"tailscale serve :8443"}}
+    ts -- "/*" --> immich
+    ts -- "/api/search/smart" --> vs
+    ts -- "/vsearch" --> vs
     subgraph server["One machine, one Docker Compose stack"]
         immich["Immich server"] --> db[("Postgres<br/>+ vsearch schema")]
         ml["Immich ML (CUDA)<br/>SigLIP2 · OCR · faces"]
         vs["vsearch<br/>(this repo)"]
+        vs -- "asks Immich, blends in<br/>video moments" --> immich
         vs -- "frames" --> ml
         vs -- "Whisper large-v3<br/>bge-m3" --> gpu(["GPU"])
-        vs -- "writes back:<br/>video vector, OCR text,<br/>transcript + translation" --> db
+        vs -- "writes back: video vector,<br/>OCR text, transcript + translation" --> db
         immich --> ml
     end
-    browser["Search page<br/>/vsearch"] -- "same login" --> vs
 ```
 
 `vsearch` is a small Python service that lives in the Immich Docker stack:
@@ -75,25 +79,47 @@ flowchart LR
    | OCR search | text in the thumbnail | text from every sampled frame |
    | Description | empty | 🎙 transcript + 🌐 English translation (searchable) |
 
-7. **It serves a search page** at `/vsearch` under the Immich address. Results open the player
-   at the exact second ("Seen 0:20", "Said 1:12 'happy birthday…'", "Written 0:08 GOA 2023"),
-   and a set of results can be saved as an Immich album. It logs in with the same Immich account.
-8. **It keeps its results in place.** If Immich re-runs a job and overwrites a video's entries,
+7. **It plugs into Immich's own search bar.** `tailscale serve` routes Immich's
+   `POST /api/search/smart` (used by the phone apps and the web) to vsearch. vsearch asks Immich
+   as usual, then blends in videos where the words were **said or written** and frame-level
+   **visual** matches. The response keeps Immich's exact format, so the apps can't tell.
+   Filtered searches (people, places, dates, photos-only) pass through untouched, and any error
+   falls back to Immich's own answer.
+8. **It serves a companion page** at `/vsearch`, styled like Immich, with two tabs:
+   - **Find in videos:** results open the player at the exact second ("Seen 0:20",
+     "Said 1:12 'happy birthday…'", "Written 0:08 GOA 2023") on a mini timeline, and can be
+     saved as an album.
+   - **Pendrives:** plug a pendrive into the phone, name it, pick its files. Each file is
+     fingerprinted *in the browser* (SHA-1, the checksum Immich uses), and files Immich already
+     has are skipped. Everything lands in the album `Pendrive - <name>`. The screen stays on,
+     failures retry, and dates come from WhatsApp/camera filenames. A list shows every pendrive
+     and its status. Stop and re-pick at any time: nothing uploads twice.
+9. **It keeps its results in place.** If Immich re-runs a job and overwrites a video's entries,
    the next pass (30 s later) puts them back.
 
 ## Results
 
-These come from a throwaway Immich with generated test videos ([testing](docs/testing.md)).
-**41/41 end-to-end checks pass.**
+These come from a throwaway Immich with 4 generated test videos among 36 photos
+([testing](docs/testing.md)). **50/50 end-to-end checks pass**, plus browser-tested pendrive uploads.
+
+**Immich's own search bar**, the same box she types into in the app:
 
 | Search | Plain Immich | With vsearch |
 |---|---|---|
-| "a cat" (cat appears at 0:20 of a lake video) | video ranked **last** (#5 of 5) | **#2**, behind only the actual cat photo; search page opens it at **0:20** |
-| "birthday cake with candles" | #3 | **#1** |
-| "dog", said in Hindi | not findable | found (speech + translation), opens at **0:01** |
-| "Goa", said in Marathi | not findable | found via the English translation |
-| "diwali", written on screen at 0:08 | only if it's in the thumbnail | found in Immich's own OCR search and at **0:08** on the page |
-| "football match" (not in any video) | n/a | **no false speech hits** |
+| "make a wish" (said in a birthday clip) | #7 | **#1** |
+| "happy birthday Priya" (said) | #5 | **#1** |
+| "park with the dog this evening" (said **in Hindi**) | #2 | **#1** |
+| "a cat" (cat appears at 0:20 of a lake video) | #9 | **#2**, behind only the actual cat photo |
+| "fireworks at night" | #6 | **#2** |
+
+**The companion page** opens "a cat" at **0:20**, "dog" (said in Hindi) at **0:01**, and
+"diwali" (written on screen) at **0:08**. It finds "Goa" said in **Marathi** through the English
+translation, and gives no false speech hits for "football match".
+
+**Pendrives** (browser test): 11 photos uploaded into `Pendrive - Test Pendrive`, with
+WhatsApp/Pixel/screenshot filenames dated correctly. Re-picking the same files gave
+**0 uploaded, 11 skipped**. A second pendrive sharing 5 files gave **3 new, 5 skipped**, and both
+albums were complete with no duplicate stored.
 
 Indexing takes about 3–8 s per short clip on an RTX 2000 Ada, including transcription and translation.
 
@@ -137,14 +163,19 @@ The full walkthrough is in **[docs/setup.md](docs/setup.md)**.
 | [User guide](docs/user-guide.md) | For the person using it: connecting, uploading phone photos and pendrives, searching |
 | [Architecture](docs/architecture.md) | How it works inside: pipeline, data model, write-back, scene pooling, search scoring, auth |
 | [Models](docs/models.md) | Which models and why, with the benchmarks and calibration numbers |
-| [Testing](docs/testing.md) | The end-to-end harness, test media, all 41 checks, bugs found along the way |
+| [Testing](docs/testing.md) | The end-to-end harness, test media, all 50 checks, pendrive upload tests, bugs found along the way |
 | [Operations](docs/operations.md) | Updates, backups, monitoring, re-indexing, uninstalling, troubleshooting |
 | [Decisions](docs/decisions.md) | Every fork in the road: what was considered, what was picked, why |
 
 ## Limits
 
-- **Immich keeps one search vector per video,** so in the regular app a 2-second moment in a long
-  video competes with the rest of it. The search page indexes every frame and is the precise tool.
+- **The Immich apps can't jump to a second.** They're native, so a merged result opens the video
+  at the start. The companion page is the jump-to-the-moment tool.
+- **The search-bar merge only works through the Tailscale address** (`:8443`), since that's where
+  the route lives. Opening Immich on `localhost` gives plain Immich search. If the vsearch container
+  is down, searches over the tailnet fail until it restarts (`restart: always`).
+- **Phone browsers can't always pick a whole folder.** On Android you pick a folder's files
+  (⋮ → Select all), one folder at a time. Keep the page open and the phone charging while it uploads.
 - **Matching speech by meaning has thin margins.** On the tests, true paraphrases scored ≥ 0.607
   and unrelated sentences ≤ 0.590. Exact words in the transcript or its translation always match.
 - **Whisper's Marathi spelling is imperfect.** The English translation of the same clip was accurate.

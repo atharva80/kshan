@@ -394,6 +394,59 @@ def reconcile(conn: psycopg.Connection, cfg: ImmichConfig, clip_dim: int) -> dic
     return fixed
 
 
+PENDRIVE_SQL = """
+create table if not exists vsearch.pendrive (
+    owner_id uuid not null,
+    name text not null,
+    album_id uuid,
+    files_total int not null default 0,
+    uploaded int not null default 0,
+    skipped int not null default 0,        -- already in Immich (resumed runs, cross-pendrive duplicates)
+    failed int not null default 0,
+    bytes_total bigint not null default 0,
+    bytes_done bigint not null default 0,
+    status text not null default 'in progress',
+    last_error text,
+    started_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    primary key (owner_id, name)
+);
+"""
+
+PENDRIVE_FIELDS = ("album_id", "files_total", "uploaded", "skipped", "failed", "bytes_total", "bytes_done",
+                   "status", "last_error")
+
+
+def pendrives(conn: psycopg.Connection, owner_id) -> list[dict]:
+    conn.execute(PENDRIVE_SQL)
+    with conn.cursor(row_factory=dict_row) as cur:
+        rows = cur.execute("""
+            select p.*, al."albumName" as album_name,
+                   (select count(*) from album_asset aa where aa."albumId" = p.album_id) as in_album
+            from vsearch.pendrive p left join album al on al.id = p.album_id
+            where p.owner_id = %s order by p.updated_at desc
+        """, (owner_id,)).fetchall()
+    for r in rows:
+        r["album_id"] = str(r["album_id"]) if r["album_id"] else None
+        r["owner_id"] = str(r["owner_id"])
+        for k in ("started_at", "updated_at"):
+            r[k] = r[k].isoformat()
+    return rows
+
+
+def save_pendrive(conn: psycopg.Connection, owner_id, name: str, fields: dict) -> None:
+    conn.execute(PENDRIVE_SQL)
+    values = {k: fields[k] for k in PENDRIVE_FIELDS if k in fields}
+    cols = ", ".join(values)
+    conn.execute(
+        f"insert into vsearch.pendrive (owner_id, name{', ' + cols if cols else ''}) "
+        f"values (%s, %s{', %s' * len(values)}) on conflict (owner_id, name) do update set "
+        + ", ".join([f"{k} = excluded.{k}" for k in values] + ["updated_at = now()"]),
+        (owner_id, name, *values.values()),
+    )
+    conn.commit()
+
+
 def status_counts(conn: psycopg.Connection, owner_id) -> dict:
     row = conn.execute(f"""
         select count(*),
