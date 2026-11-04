@@ -115,6 +115,14 @@
   .drive { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; background: var(--bg); border-radius: 12px; padding: 10px 12px; }
   .drive .name { font-weight: 600; }
   .drive .meta { color: var(--muted); font-size: .8rem; grid-column: 1 / -1; }
+  .drive .more { grid-column: 1 / -1; justify-self: start; margin-top: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--primary);
+    border-radius: 999px; padding: 6px 14px; font: inherit; font-size: .82rem; font-weight: 600; }
+  .drive-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .dchip { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: .88rem; }
+  .dchip small { color: var(--muted); margin-left: 4px; }
+  .dchip[aria-pressed="true"] { background: var(--primary-soft); border-color: transparent; color: var(--primary); font-weight: 600; }
+  .dchip[aria-pressed="true"] small { color: inherit; }
+  .target { font-size: .82rem; color: var(--muted); margin-top: 6px; min-height: 1.2em; }
   .badge { font-size: .72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; align-self: start; }
   .badge.done { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
   .badge.progress { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
@@ -187,9 +195,13 @@
     <div class="card" id="upload-card">
       <h2>Upload a pendrive</h2>
       <p class="hint">Plug the pendrive into your phone, give it a name, pick everything on it. It all goes into its own album. Already-uploaded files are skipped automatically, so it's safe to stop and start again.</p>
-      <label class="field" for="pd-name">Pendrive name</label>
-      <input class="text" id="pd-name" list="pd-names" placeholder="e.g. Blue 64GB, Sandisk 32GB" maxlength="60" autocomplete="off">
-      <datalist id="pd-names"></datalist>
+      <div class="hidden" id="continue">
+        <label class="field">Add more to a pendrive you started</label>
+        <div class="drive-chips" id="chips"></div>
+      </div>
+      <label class="field" for="pd-name" id="pd-label">Pendrive name</label>
+      <input class="text" id="pd-name" placeholder="e.g. Blue 64GB, Sandisk 32GB" maxlength="60" autocomplete="off">
+      <div class="target" id="pd-target"></div>
       <div class="row">
         <button class="big" type="button" id="pick-files">Choose photos &amp; videos</button>
         <button class="big secondary hidden" type="button" id="pick-folder">Choose a whole folder</button>
@@ -462,7 +474,7 @@ async function ensureAlbum(name) {
   const albumName = `Pendrive - ${name}`;
   const list = await immich('albums');
   if (list.status === 401) throw new Error('login');
-  const found = (await list.json()).find((a) => a.albumName === albumName && (!myId || a.ownerId === myId));
+  const found = (await list.json()).find((a) => a.albumName.toLowerCase() === albumName.toLowerCase() && (!myId || a.ownerId === myId));
   if (found) return found.id;
   const res = await immich('albums', json({ albumName, description: `Everything uploaded from the pendrive "${name}".` }));
   if (!res.ok) throw new Error(`could not create the album (${res.status})`);
@@ -538,7 +550,7 @@ async function addToAlbum(ids) {
 }
 
 async function startRun(items) {
-  const name = $('pd-name').value.trim().split(/\s+/).join(' ');
+  const name = driveName();
   if (!name) { $('pd-name').focus(); $('pd-name').placeholder = 'Give this pendrive a name first'; return; }
   run = { name, items, active: true, up: 0, skip: 0, fail: 0, bytesTotal: items.reduce((s, i) => s + i.file.size, 0),
           bytesDone: 0, hashBytes: 0, started: Date.now(), xhrs: new Set(), pendingAlbum: [], failed: [], albumMisses: 0 };
@@ -693,11 +705,38 @@ $('stop').addEventListener('click', async () => {
 $('retry').addEventListener('click', () => { const again = run.failed.map((i) => ({ file: i.file })); $('pd-name').value = run.name; startRun(again); });
 window.addEventListener('beforeunload', (e) => { if (run?.active) { e.preventDefault(); e.returnValue = ''; } });
 
+// The typed name, tidied, and spelled like an existing pendrive's if it is one ("blue 64gb" adds to "Blue 64GB").
+let drives = [];
+function driveName() {
+  const typed = $('pd-name').value.trim().split(/\s+/).join(' ');
+  return drives.find((d) => d.name.toLowerCase() === typed.toLowerCase())?.name || typed;
+}
+function showTarget() {
+  const name = driveName();
+  const d = drives.find((x) => x.name === name);
+  $('pd-target').innerHTML = !name ? ''
+    : d ? `Adds to the album <b>Pendrive - ${esc(d.name)}</b>, which already has ${num(d.in_album)}. Files already there are skipped.`
+    : `Creates a new album <b>Pendrive - ${esc(name)}</b>.`;
+  for (const c of $('chips').children) c.setAttribute('aria-pressed', String(c.dataset.name === name));
+}
+function continueDrive(name) {
+  $('pd-name').value = name; showTarget();
+  if (!run?.active) $('upload-card').scrollIntoView({ behavior: 'smooth' });
+}
+$('pd-name').addEventListener('input', showTarget);
+$('chips').addEventListener('click', (e) => { const c = e.target.closest('.dchip'); if (c) continueDrive(c.dataset.name); });
+$('drives').addEventListener('click', (e) => { const b = e.target.closest('.more'); if (b) continueDrive(b.dataset.name); });
+
 async function loadDrives() {
   const res = await ours('pendrives');
   if (!res.ok) return;
-  const { pendrives } = await res.json();
-  $('pd-names').innerHTML = pendrives.map((p) => `<option value="${esc(p.name)}">`).join('');
+  drives = (await res.json()).pendrives;
+  const pendrives = drives;
+  $('continue').classList.toggle('hidden', !pendrives.length);
+  $('pd-label').textContent = pendrives.length ? 'Or a new pendrive' : 'Pendrive name';
+  $('chips').innerHTML = pendrives.map((p) =>
+    `<button class="dchip" type="button" data-name="${esc(p.name)}" aria-pressed="false">${esc(p.name)}<small>${num(p.in_album)}</small></button>`).join('');
+  showTarget();
   if (!pendrives.length) { $('drives').innerHTML = '<p class="hint">None yet.</p>'; return; }
   $('drives').innerHTML = pendrives.map((p) => {
     const cls = p.status === 'done' ? 'done' : p.status === 'in progress' ? 'progress' : 'failed';
@@ -705,7 +744,8 @@ async function loadDrives() {
     const album = p.album_id ? `<a href="${immichUrl}/albums/${p.album_id}"><b>${num(p.in_album)}</b> photos &amp; videos in its album</a>` : '';
     return `<div class="drive"><span class="name">${esc(p.name)}</span><span class="badge ${cls}">${esc(label)}</span>
       <span class="meta">${album}<br>Last run ${new Date(p.updated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}:
-      ${num(p.files_total)} picked · ${num(p.uploaded)} new · ${num(p.skipped)} already in Immich${p.failed ? ` · <b>${num(p.failed)} failed</b>` : ''}</span></div>`;
+      ${num(p.files_total)} picked · ${num(p.uploaded)} new · ${num(p.skipped)} already in Immich${p.failed ? ` · <b>${num(p.failed)} failed</b>` : ''}</span>
+      <button class="more" type="button" data-name="${esc(p.name)}">Add more files</button></div>`;
   }).join('');
 }
 

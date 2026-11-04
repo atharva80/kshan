@@ -54,6 +54,10 @@ through the **Pendrives** page.
    - Tip: **⋮ → Add to Home screen** makes it open like an app.
 3. Type a **name** for this pendrive, e.g. *Blue 64GB*. That becomes the album
    **"Pendrive - Blue 64GB"** in Immich.
+   - **Adding more to a pendrive you already started** (another folder, another night): tap its
+     name under **Add more to a pendrive you started**, or **Add more files** on it in the list.
+     Everything goes into the same album. Typing the same name works too, in any capitals.
+     The line under the name box always says whether it **adds to** an album or **creates** a new one.
 4. Tap **Choose photos & videos**. In the picker, open the **USB drive**, go into a folder,
    then **⋮ → Select all** → Select.
    - Folders with sub-folders: pick one folder, then tap the button again for the next.
@@ -69,7 +73,8 @@ through the **Pendrives** page.
 uploads twice, even across different pendrives.
 
 **Your pendrives** at the bottom of the page lists every pendrive: how many photos and videos
-are in its album, and what the last run did. Tap the count to open the album.
+are in its album, and what the last run did. Tap the count to open the album, or **Add more files**
+to continue that pendrive.
 
 Good to know:
 - **Duplicates:** the same photo on three pendrives is stored **once**, and shows in all three

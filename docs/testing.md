@@ -123,6 +123,7 @@ way Android's picker would hand them over:
 | "Red 32GB" | 5 of the same + 3 new | **3 new, 5 already in Immich**, its album has 8, the first album still 11 |
 
 | "Green 16GB": 15 files, then the page reloaded (app killed) and the same files picked | 15, then 15 | first run 15 uploaded; after the reload **0 bytes re-read from the files**, 15 recognised in 0.6 s |
+| "test": 3 files; page reloaded; ` Test ` typed with 3 old + 2 new; then **Add more files** tapped | 3, then 5 | the name matched the existing pendrive, so **2 new, 3 already in Immich** went into the **same** album (5), one pendrive in the list; tapping *Add more files* or its chip fills the name |
 | "Mixed drive": 3 good + 2 unreadable files | 5 | 3 uploaded, 2 failed with *Retry failed*, the run finishes |
 | "Unplugged drive": 8 unreadable files in a row | 8 | stops after 5 with "pendrive not readable", doesn't fail all 8 |
 
