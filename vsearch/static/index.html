@@ -122,6 +122,10 @@
   .dchip small { color: var(--muted); margin-left: 4px; }
   .dchip[aria-pressed="true"] { background: var(--primary-soft); border-color: transparent; color: var(--primary); font-weight: 600; }
   .dchip[aria-pressed="true"] small { color: inherit; }
+  .albums-preview { margin-top: 12px; font-size: .85rem; background: var(--bg); border-radius: 12px; padding: 10px 12px; }
+  .albums-preview div { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
+  .albums-preview span:last-child { color: var(--muted); white-space: nowrap; }
+  .drive .albums { grid-column: 1 / -1; font-size: .82rem; display: grid; gap: 2px; }
   .target { font-size: .82rem; color: var(--muted); margin-top: 6px; min-height: 1.2em; }
   .badge { font-size: .72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; align-self: start; }
   .badge.done { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
@@ -209,10 +213,16 @@
       <input type="file" id="files" multiple accept="image/*,video/*,.heic,.heif,.mts,.m2ts,.3gp,.mkv,.avi" class="hidden">
       <input type="file" id="folder" multiple webkitdirectory class="hidden">
       <div class="picked hidden" id="picked"></div>
+      <div class="hidden" id="ind-box" style="margin-top:12px">
+        <label class="field" for="ind-name">Name for the photos &amp; videos you picked one by one</label>
+        <input class="text" id="ind-name" placeholder="e.g. Birthday, Random" maxlength="60" autocomplete="off">
+      </div>
+      <div class="albums-preview hidden" id="albums-preview"></div>
       <div class="row hidden" id="start-row">
         <button class="big" type="button" id="start">Start upload</button>
       </div>
-      <p class="hint" style="margin-top:12px">In the file picker: open the pendrive (USB drive), go into a folder, then <b>⋮ → Select all</b>. Do one folder at a time if it has many folders.</p>
+      <p class="hint" style="margin-top:12px"><b>Choose a whole folder:</b> the folder becomes its own album, named after it. Pick a folder that only has folders inside, and each of those becomes its own album.<br>
+        <b>Choose photos &amp; videos:</b> open the pendrive, go into a folder, then <b>⋮ → Select all</b> or tap the ones you want. They go into one album with a name you type.</p>
     </div>
 
     <div class="card hidden" id="run-card">
@@ -449,20 +459,50 @@ const folderInput = $('folder');
 if ('webkitdirectory' in folderInput && !/iPhone|iPad|iPod/.test(navigator.userAgent)) $('pick-folder').classList.remove('hidden');
 $('pick-files').addEventListener('click', () => $('files').click());
 $('pick-folder').addEventListener('click', () => folderInput.click());
-for (const input of [$('files'), folderInput]) input.addEventListener('change', () => { addPicked(input.files); input.value = ''; });
+$('files').addEventListener('change', () => { addPicked($('files').files, false); $('files').value = ''; });
+folderInput.addEventListener('change', () => { addPicked(folderInput.files, true); folderInput.value = ''; });
+$('ind-name').addEventListener('input', previewAlbums);
 
-function addPicked(fileList) {
-  const seen = new Set(picked.map((f) => f.name + '|' + f.size + '|' + f.lastModified));
+const isMedia = (f) => MEDIA.test(f.name) || /^(image|video)\//.test(f.type);
+const tidy = (t) => t.trim().split(/\s+/).join(' ');
+
+// Which album folder a file from a whole-folder pick belongs to: the picked folder itself,
+// or, when it only holds folders (e.g. the pendrive's top level), each of those folders.
+function folderOf(files) {
+  const media = [...files].filter(isMedia);
+  const parts = (f) => (f.webkitRelativePath || '').split('/');
+  const loose = media.some((f) => parts(f).length <= 2);
+  return (f) => { const p = parts(f); return p.length < 2 ? null : loose || p.length === 2 ? p[0] : p[1]; };
+}
+
+// picked: [{ file, folder }], folder null = picked one by one
+function addPicked(fileList, wholeFolder) {
+  const seen = new Set(picked.map(({ file: f }) => f.name + '|' + f.size + '|' + f.lastModified));
+  const folder = wholeFolder ? folderOf(fileList) : () => null;
   for (const f of fileList) {
     const key = f.name + '|' + f.size + '|' + f.lastModified;
-    if ((MEDIA.test(f.name) || /^(image|video)\//.test(f.type)) && !seen.has(key)) { picked.push(f); seen.add(key); }
+    if (isMedia(f) && !seen.has(key)) { picked.push({ file: f, folder: folder(f) }); seen.add(key); }
   }
-  const bytes = picked.reduce((s, f) => s + f.size, 0);
+  const bytes = picked.reduce((s, x) => s + x.file.size, 0);
   $('picked').classList.toggle('hidden', !picked.length);
   $('start-row').classList.toggle('hidden', !picked.length);
   $('picked').innerHTML = `<b>${num(picked.length)}</b> photos/videos picked · ${gb(bytes)} &nbsp;<button class="ghost" id="clear" type="button">Clear</button>
-    <div class="hint" style="margin:6px 0 0">You can pick more folders before starting; they're added to this list.</div>`;
+    <div class="hint" style="margin:6px 0 0">You can pick more before starting; they're added to this list.</div>`;
   $('clear').onclick = () => { picked = []; addPicked([]); };
+  $('ind-box').classList.toggle('hidden', !picked.some((x) => !x.folder));
+  previewAlbums();
+}
+
+// The album each picked file goes into: "<pendrive> - <folder>" or "<pendrive> - Individual - <name>".
+function albumFor(pd, item) {
+  return item.folder ? `${pd} - ${tidy(item.folder)}` : `${pd} - Individual - ${tidy($('ind-name').value) || '…'}`;
+}
+function previewAlbums() {
+  const pd = driveName() || '…', counts = new Map();
+  for (const x of picked) { const a = albumFor(pd, x); counts.set(a, (counts.get(a) || 0) + 1); }
+  $('albums-preview').classList.toggle('hidden', !counts.size);
+  $('albums-preview').innerHTML = `<b>Goes into ${counts.size === 1 ? 'this album' : `these ${counts.size} albums`}:</b>` +
+    [...counts].map(([a, n]) => `<div><span>${esc(a)}</span><span>${num(n)}</span></div>`).join('');
 }
 
 async function keepAwake() {
@@ -470,13 +510,14 @@ async function keepAwake() {
 }
 document.addEventListener('visibilitychange', keepAwake);
 
-async function ensureAlbum(name) {
-  const albumName = `Pendrive - ${name}`;
+async function ensureAlbum(albumName, pd) {
   const list = await immich('albums');
   if (list.status === 401) throw new Error('login');
-  const found = (await list.json()).find((a) => a.albumName.toLowerCase() === albumName.toLowerCase() && (!myId || a.ownerId === myId));
+  // Only my own album of that name (not one shared with me). Immich versions name the owner differently.
+  const owner = (a) => a.ownerId ?? a.owner?.id ?? a.albumUsers?.find((u) => u.role === 'owner')?.user?.id;
+  const found = (await list.json()).find((a) => a.albumName.toLowerCase() === albumName.toLowerCase() && (!myId || !owner(a) || owner(a) === myId));
   if (found) return found.id;
-  const res = await immich('albums', json({ albumName, description: `Everything uploaded from the pendrive "${name}".` }));
+  const res = await immich('albums', json({ albumName, description: `Uploaded from the pendrive "${pd}".` }));
   if (!res.ok) throw new Error(`could not create the album (${res.status})`);
   return (await res.json()).id;
 }
@@ -534,12 +575,18 @@ async function uploadWithRetry(item) {
   throw new Error('stopped');
 }
 
-async function addToAlbum(ids) {
+// Adds what's waiting to each album; pending is a Map albumId -> asset ids.
+async function flushAlbums(minimum = 0) {
+  for (const [albumId, ids] of run.pendingAlbum) {
+    if (ids.length > minimum) await addToAlbum(albumId, ids.splice(0));
+  }
+}
+async function addToAlbum(albumId, ids) {
   for (let i = 0; i < ids.length; i += 200) {
     const chunk = ids.slice(i, i + 200);
     for (let attempt = 0; ; attempt++) {
       try {
-        const res = await immich(`albums/${run.albumId}/assets`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: chunk }) });
+        const res = await immich(`albums/${albumId}/assets`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: chunk }) });
         if (res.ok) break;
         if (res.status === 401) throw Object.assign(new Error('login'), { status: 401 });
       } catch (e) { if (e.status === 401) throw e; }
@@ -552,8 +599,12 @@ async function addToAlbum(ids) {
 async function startRun(items) {
   const name = driveName();
   if (!name) { $('pd-name').focus(); $('pd-name').placeholder = 'Give this pendrive a name first'; return; }
+  if (items.some((x) => !x.folder && !x.album) && !tidy($('ind-name').value)) {
+    $('ind-name').focus(); $('ind-name').placeholder = 'Give these a name first'; return;
+  }
+  for (const x of items) x.album ??= albumFor(name, x);
   run = { name, items, active: true, up: 0, skip: 0, fail: 0, bytesTotal: items.reduce((s, i) => s + i.file.size, 0),
-          bytesDone: 0, hashBytes: 0, started: Date.now(), xhrs: new Set(), pendingAlbum: [], failed: [], albumMisses: 0 };
+          bytesDone: 0, hashBytes: 0, started: Date.now(), xhrs: new Set(), pendingAlbum: new Map(), failed: [], albumMisses: 0, albums: new Map() };
   $('run-card').classList.remove('hidden'); $('upload-card').classList.add('hidden');
   $('retry').classList.add('hidden'); $('open-album').classList.add('hidden'); $('stop').classList.remove('hidden');
   $('run-tip').classList.remove('hidden');
@@ -562,7 +613,12 @@ async function startRun(items) {
   await keepAwake();
   try {
     await waitOnline();
-    run.albumId = await ensureAlbum(name);
+    for (const x of items) {
+      if (!run.albums.has(x.album)) run.albums.set(x.album, await ensureAlbum(x.album, name));
+      x.albumId = run.albums.get(x.album);
+    }
+    for (const id of run.albums.values()) run.pendingAlbum.set(id, []);
+    run.albumId = [...run.albums.values()][0];
     await report('in progress');
     const queue = [];
     let hashing = true;
@@ -604,7 +660,7 @@ async function startRun(items) {
           }
           for (const r of results || []) {
             const item = items[+r.id];
-            if (r.action === 'reject' && r.assetId) { item.assetId = r.assetId; run.skip++; run.bytesDone += item.file.size; run.pendingAlbum.push(r.assetId); memo.put(item.file, { checksum: item.checksum, assetId: r.assetId }); }
+            if (r.action === 'reject' && r.assetId) { item.assetId = r.assetId; run.skip++; run.bytesDone += item.file.size; run.pendingAlbum.get(item.albumId).push(r.assetId); memo.put(item.file, { checksum: item.checksum, assetId: r.assetId }); }
             else if (r.action === 'reject') { run.fail++; item.error = r.reason || 'rejected'; run.failed.push(item); }
             else queue.push(item);
           }
@@ -623,14 +679,14 @@ async function startRun(items) {
           const res = await uploadWithRetry(item);
           item.assetId = res.id;
           res.status === 'duplicate' ? run.skip++ : run.up++;
-          run.pendingAlbum.push(res.id);
+          run.pendingAlbum.get(item.albumId).push(res.id);
           memo.put(item.file, { checksum: item.checksum, assetId: res.id });
         } catch (e) {
           if (e.status === 401) { run.active = false; showLogin(); return; }
           if (!run.active) return;
           run.fail++; item.error = e.message; run.failed.push(item); run.bytesDone += item.file.size;
         }
-        if (run.pendingAlbum.length >= 50) await addToAlbum(run.pendingAlbum.splice(0));
+        await flushAlbums(49);
         paint();
       }
     };
@@ -640,7 +696,7 @@ async function startRun(items) {
     } finally {
       clearInterval(ticker);
     }
-    await addToAlbum(run.pendingAlbum.splice(0));
+    await flushAlbums();
     if (!run.finished) await finish(run.lostDrive ? 'stopped' : run.active ? (run.fail ? 'done with errors' : 'done') : 'stopped');
   } catch (e) {
     run.active = false;
@@ -674,7 +730,8 @@ async function finish(status) {
   if (run.lostDrive) $('run-title').textContent = `“${run.name}”: pendrive not readable`;
   $('retry').classList.toggle('hidden', !run.failed.length);
   $('open-album').classList.remove('hidden');
-  $('open-album').href = `${immichUrl}/albums/${run.albumId}`;
+  $('open-album').href = run.albums.size === 1 ? `${immichUrl}/albums/${run.albumId}` : `${immichUrl}/albums`;
+  $('open-album').textContent = run.albums.size === 1 ? 'Open the album' : `Open the albums (${run.albums.size})`;
   paint();
   picked = []; addPicked([]);
   $('upload-card').classList.remove('hidden');
@@ -695,14 +752,14 @@ function paint() {
 const setLine = (t) => { $('run-line').textContent = t; };
 const setNow = (t) => { $('now').textContent = t; };
 
-$('start').addEventListener('click', () => startRun(picked.map((file) => ({ file }))));
+$('start').addEventListener('click', () => startRun(picked.map((x) => ({ ...x }))));
 $('stop').addEventListener('click', async () => {
   if (!run) return;
   run.active = false; run.xhrs.forEach((x) => x.abort());
-  await addToAlbum(run.pendingAlbum.splice(0));
+  await flushAlbums();
   await finish('stopped'); loadDrives();
 });
-$('retry').addEventListener('click', () => { const again = run.failed.map((i) => ({ file: i.file })); $('pd-name').value = run.name; startRun(again); });
+$('retry').addEventListener('click', () => { const again = run.failed.map((i) => ({ file: i.file, folder: i.folder, album: i.album })); $('pd-name').value = run.name; startRun(again); });
 window.addEventListener('beforeunload', (e) => { if (run?.active) { e.preventDefault(); e.returnValue = ''; } });
 
 // The typed name, tidied, and spelled like an existing pendrive's if it is one ("blue 64gb" adds to "Blue 64GB").
@@ -715,15 +772,15 @@ function showTarget() {
   const name = driveName();
   const d = drives.find((x) => x.name === name);
   $('pd-target').innerHTML = !name ? ''
-    : d ? `Adds to the album <b>Pendrive - ${esc(d.name)}</b>, which already has ${num(d.in_album)}. Files already there are skipped.`
-    : `Creates a new album <b>Pendrive - ${esc(name)}</b>.`;
+    : d ? `Adds to <b>${esc(d.name)}</b>, which has ${num(d.in_album)} so far. Files already uploaded are skipped.`
+    : `A new pendrive: <b>${esc(name)}</b>. Its albums will be named “${esc(name)} - …”.`;
   for (const c of $('chips').children) c.setAttribute('aria-pressed', String(c.dataset.name === name));
 }
 function continueDrive(name) {
-  $('pd-name').value = name; showTarget();
+  $('pd-name').value = name; showTarget(); previewAlbums();
   if (!run?.active) $('upload-card').scrollIntoView({ behavior: 'smooth' });
 }
-$('pd-name').addEventListener('input', showTarget);
+$('pd-name').addEventListener('input', () => { showTarget(); previewAlbums(); });
 $('chips').addEventListener('click', (e) => { const c = e.target.closest('.dchip'); if (c) continueDrive(c.dataset.name); });
 $('drives').addEventListener('click', (e) => { const b = e.target.closest('.more'); if (b) continueDrive(b.dataset.name); });
 
@@ -741,9 +798,11 @@ async function loadDrives() {
   $('drives').innerHTML = pendrives.map((p) => {
     const cls = p.status === 'done' ? 'done' : p.status === 'in progress' ? 'progress' : 'failed';
     const label = p.status === 'in progress' && Date.now() - new Date(p.updated_at) > 120000 ? 'paused' : p.status;
-    const album = p.album_id ? `<a href="${immichUrl}/albums/${p.album_id}"><b>${num(p.in_album)}</b> photos &amp; videos in its album</a>` : '';
+    const albums = (p.albums || []).map((a) =>
+      `<a href="${immichUrl}/albums/${a.id}"><b>${esc(a.name)}</b> · ${num(a.count)}</a>`).join('');
     return `<div class="drive"><span class="name">${esc(p.name)}</span><span class="badge ${cls}">${esc(label)}</span>
-      <span class="meta">${album}<br>Last run ${new Date(p.updated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}:
+      <div class="albums">${albums}</div>
+      <span class="meta"><b>${num(p.in_album)}</b> photos &amp; videos in ${num((p.albums || []).length)} album${(p.albums || []).length === 1 ? '' : 's'}<br>Last run ${new Date(p.updated_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}:
       ${num(p.files_total)} picked · ${num(p.uploaded)} new · ${num(p.skipped)} already in Immich${p.failed ? ` · <b>${num(p.failed)} failed</b>` : ''}</span>
       <button class="more" type="button" data-name="${esc(p.name)}">Add more files</button></div>`;
   }).join('');

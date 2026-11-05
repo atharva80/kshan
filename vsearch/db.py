@@ -421,12 +421,33 @@ def pendrives(conn: psycopg.Connection, owner_id) -> list[dict]:
     conn.execute(PENDRIVE_SQL)
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute("""
-            select p.*, al."albumName" as album_name,
-                   (select count(*) from album_asset aa where aa."albumId" = p.album_id) as in_album
+            select p.*, al."albumName" as album_name
             from vsearch.pendrive p left join album al on al.id = p.album_id
             where p.owner_id = %s order by p.updated_at desc
         """, (owner_id,)).fetchall()
+        # A pendrive's albums: "<name> - <folder>", "<name> - Individual - <label>", and the one
+        # it was last uploaded into (older runs used "Pendrive - <name>").
+        albums = cur.execute("""
+            select p.name as pendrive, al.id, al."albumName" as name,
+                   (select count(*) from album_asset aa where aa."albumId" = al.id) as count
+            from vsearch.pendrive p
+            join album_user au on au."userId" = p.owner_id and au.role = 'owner'
+            join album al on al.id = au."albumId" and al."deletedAt" is null
+             and (al.id = p.album_id or lower(left(al."albumName", length(p.name) + 3)) = lower(p.name) || ' - ')
+            where p.owner_id = %s order by al."albumName"
+        """, (owner_id,)).fetchall()
+        totals = {r["name"]: r["n"] for r in cur.execute("""
+            select p.name, count(distinct aa."assetId") as n
+            from vsearch.pendrive p
+            join album_user au on au."userId" = p.owner_id and au.role = 'owner'
+            join album al on al.id = au."albumId" and al."deletedAt" is null
+             and (al.id = p.album_id or lower(left(al."albumName", length(p.name) + 3)) = lower(p.name) || ' - ')
+            join album_asset aa on aa."albumId" = al.id
+            where p.owner_id = %s group by p.name
+        """, (owner_id,)).fetchall()}
     for r in rows:
+        r["albums"] = [{"id": str(a["id"]), "name": a["name"], "count": a["count"]} for a in albums if a["pendrive"] == r["name"]]
+        r["in_album"] = totals.get(r["name"], 0)
         r["album_id"] = str(r["album_id"]) if r["album_id"] else None
         r["owner_id"] = str(r["owner_id"])
         for k in ("started_at", "updated_at"):

@@ -96,7 +96,8 @@ flowchart LR
      saved as an album.
    - **Pendrives:** plug a pendrive into the phone, name it, pick its files. Each file is
      fingerprinted *in the browser* (SHA-1, the checksum Immich uses), and files Immich already
-     has are skipped. Everything lands in the album `Pendrive - <name>`. The screen stays on,
+     has are skipped. A whole folder becomes the album `<pendrive> - <folder>` (a folder of folders gives one album each),
+     and hand-picked files go into `<pendrive> - Individual - <name>`. The screen stays on,
      failures retry, and dates come from WhatsApp/camera filenames. A list shows every pendrive
      and its status, and one tap continues a pendrive into the same album (another folder, another night). Stop and re-pick at any time: nothing uploads twice, and files done in an earlier
      run are recognized instantly from the phone's memory without being read again.
@@ -124,7 +125,7 @@ These come from a throwaway Immich with 4 generated test videos among 36 photos
 "diwali" (written on screen) at **0:08**. It finds "Goa" said in **Marathi** through the English
 translation, and gives no false speech hits for "football match".
 
-**Pendrives** (browser test): 11 photos uploaded into `Pendrive - Test Pendrive`, with
+**Pendrives** (browser test): 11 photos uploaded into one pendrive album, with
 WhatsApp/Pixel/screenshot filenames dated correctly. Re-picking the same files gave
 **0 uploaded, 11 skipped**. A second pendrive sharing 5 files gave **3 new, 5 skipped**, and both
 albums were complete with no duplicate stored.

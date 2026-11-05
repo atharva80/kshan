@@ -52,17 +52,19 @@ through the **Pendrives** page.
 2. In **Chrome**, with Tailscale on, open Immich (`https://YOUR-SERVER:8443`) and tap
    **Pendrives** in the side menu, or go straight to `https://YOUR-SERVER:8443/vsearch/#pendrives`.
    - Tip: **⋮ → Add to Home screen** makes it open like an app.
-3. Type a **name** for this pendrive, e.g. *Blue 64GB*. That becomes the album
-   **"Pendrive - Blue 64GB"** in Immich.
-   - **Adding more to a pendrive you already started** (another folder, another night): tap its
-     name under **Add more to a pendrive you started**, or **Add more files** on it in the list.
-     Everything goes into the same album. Typing the same name works too, in any capitals.
-     The line under the name box always says whether it **adds to** an album or **creates** a new one.
-4. Tap **Choose photos & videos**. In the picker, open the **USB drive**, go into a folder,
-   then **⋮ → Select all** → Select.
-   - Folders with sub-folders: pick one folder, then tap the button again for the next.
-     Everything goes into one list.
-   - If your phone shows **Choose a whole folder**, that picks a folder with everything inside it.
+3. **Pick the pendrive:** type a **name** for a new one, e.g. *PD32*, or tap one you started
+   earlier under **Add more to a pendrive you started** (or **Add more files** on it in the list).
+   Typing the same name works too, in any capitals.
+4. **Pick what to upload.** Every pick becomes an album named after the pendrive:
+
+   | You pick | Album(s) in Immich |
+   |---|---|
+   | **Choose a whole folder** → *Trip 2019* | **PD32 - Trip 2019** (with everything inside, sub-folders too) |
+   | **Choose a whole folder** → a folder that only has folders inside, e.g. the pendrive itself with *Fest* and *Goa* | **PD32 - Fest** and **PD32 - Goa**, one each |
+   | **Choose photos & videos** → open a folder, **⋮ → Select all** or tap some | **PD32 - Individual - *name you type*** (a box for the name appears) |
+
+   You can pick several times before starting. A box shows exactly which albums the files go
+   into. Picking the same folder again later adds to its existing album, it never makes a second one.
 5. Tap **Start upload**. You'll see a progress bar, *uploaded*, *already in Immich*, *failed*,
    *left*, the speed, and the time remaining.
 6. **Keep the page open with the phone charging.** The screen stays on by itself. It's fine
@@ -72,9 +74,8 @@ through the **Pendrives** page.
 **same files**. Anything already uploaded is recognised and skipped in seconds, so nothing ever
 uploads twice, even across different pendrives.
 
-**Your pendrives** at the bottom of the page lists every pendrive: how many photos and videos
-are in its album, and what the last run did. Tap the count to open the album, or **Add more files**
-to continue that pendrive.
+**Your pendrives** at the bottom of the page lists every pendrive with its albums (tap one to
+open it), the total, and what the last run did. **Add more files** continues that pendrive.
 
 Good to know:
 - **Duplicates:** the same photo on three pendrives is stored **once**, and shows in all three

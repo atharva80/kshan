@@ -124,6 +124,8 @@ way Android's picker would hand them over:
 
 | "Green 16GB": 15 files, then the page reloaded (app killed) and the same files picked | 15, then 15 | first run 15 uploaded; after the reload **0 bytes re-read from the files**, 15 recognised in 0.6 s |
 | "test": 3 files; page reloaded; ` Test ` typed with 3 old + 2 new; then **Add more files** tapped | 3, then 5 | the name matched the existing pendrive, so **2 new, 3 already in Immich** went into the **same** album (5), one pendrive in the list; tapping *Add more files* or its chip fills the name |
+| "PD32": a whole folder *Trip 2019* (3 photos + `Day2/`), the top level *USB/* holding *Fest/* and *Goa/*, 2 photos picked one by one | 10 | albums **PD32 - Trip 2019** (4), **PD32 - Fest** (2), **PD32 - Goa** (2), **PD32 - Individual - Random** (2); Start refuses until the Individual name is typed |
+| "PD32" continued: *trip 2019* again + 1 new photo, after a reload | 5 | **1 new, 4 already in Immich**, added to the existing *Trip 2019* album (5); Immich still has exactly 4 PD32 albums |
 | "Mixed drive": 3 good + 2 unreadable files | 5 | 3 uploaded, 2 failed with *Retry failed*, the run finishes |
 | "Unplugged drive": 8 unreadable files in a row | 8 | stops after 5 with "pendrive not readable", doesn't fail all 8 |
 
@@ -151,6 +153,7 @@ vectors (sizes 0–100003 bytes, odd chunk splits) and on a 50 MB file.
 | One unreadable file (or a loose pendrive) aborted the whole run (review) | read errors weren't caught | the file is marked failed; 5 in a row stops the run with a clear message |
 | A failed album add was silently ignored (review) | the response wasn't checked | retry; re-picking adds it later |
 | Immich's search bar could hang if our side was slow (review) | the merge had no time limit | 8 s limit, then plain Immich results |
+| Every pendrive run made a new album with the same name (found on the real library: 4 × `Pendrive - <name>`) | the "album exists?" check compared `ownerId`, which Immich v3 doesn't send (the owner is in `albumUsers`) | read the owner from `albumUsers`; the test now counts albums in Immich |
 | The page was blank when opened as `/vsearch`, or when a blocker refused `upload.js` | relative script URL; separate script file | redirect to `/vsearch/`; scripts inlined |
 | The "survives Immich's re-run" test passed without exercising anything | in v3 a forced Smart Search run didn't rewrite existing video rows | the test now overwrites the rows directly, exactly as Immich's jobs would, then checks the repair |
 

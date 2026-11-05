@@ -196,7 +196,7 @@ erDiagram
     pendrive {
         uuid owner_id PK
         text name PK
-        uuid album_id "Immich album Pendrive - name"
+        uuid album_id "last album uploaded into"
         int files_total "picked in the last run"
         int uploaded
         int skipped "already in Immich"
@@ -379,7 +379,7 @@ happens in the browser, talking to Immich's own API on the same origin:
 
 1. **Pick:** the Android or iOS file picker shows the USB drive. Media files are kept
    (by extension or MIME type), and a file picked twice is counted once.
-2. **Album:** `Pendrive - <name>` is created, or reused if it already exists.
+2. **Albums:** each file's album is decided when it's picked: a whole-folder pick gives `<pendrive> - <folder>` (from `webkitRelativePath`; when the picked folder holds only folders, each first-level folder is its own album), hand-picked files give `<pendrive> - Individual - <name>`. Each album is created, or reused if the user already owns one with that name (case-insensitive; the owner comes from `albumUsers`). The pendrive list finds a pendrive's albums by that name prefix.
 3. **Fingerprint:** `lib.js` hashes each file with a streaming SHA-1 in 4 MB slices, so
    multi-GB videos never sit in memory. It matches Node's crypto on 70 test vectors, at
    ~185 MB/s on desktop.
