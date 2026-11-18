@@ -218,3 +218,41 @@ precision, cross-language speech and resilience.
 does, and it caught a string of real bugs ([testing.md](testing.md#bugs-testing-caught-and-how-they-were-fixed)).
 Test photos come from Wikimedia Commons with attribution and are downloaded on demand, never
 committed.
+
+### 17. A public benchmark instead of four generated clips
+
+**Picked:** Charades-STA (visual moments with time windows) plus FLEURS Hindi, Marathi and
+English (read speech with shared sentence ids), searched across one whole library in a
+throwaway Immich, with 30/70 dev/test splits and fixed seeds. See [evaluation.md](evaluation.md).
+
+**Considered:** more generated clips (no ground truth beyond what we generated; it can't
+expose blind spots); YouTube-sourced datasets (licences, links rot); MSR-VTT and similar
+captioning sets (whole-video captions, no moments, English only).
+
+**Why:** Charades-STA has human-written queries with start/end times, so "the right second"
+can be measured. FLEURS has the same sentence recorded in many languages, so an English query
+with a Hindi or Marathi gold clip comes for free, with no translation of our own. Both are
+public and pinned by sha256. Charades is non-commercial, so only the download script is
+committed; clips are fetched one by one with HTTP range requests instead of the 16 GB archive.
+Searching the whole library, not one given video, matches how the app is used, so the
+numbers are deliberately not compared with the moment-retrieval papers.
+
+**Number discipline:** every number in the docs comes from a results file that records the
+commit and dataset hashes; fixes are tuned on dev and reported on test; a fix that didn't help
+stays in the table.
+
+### 18. Whole-word matching for "the exact words"
+
+**Picked:** Postgres regex phrase matching on word boundaries (`vsearch/lexical.py`), with
+Devanagari vowel signs and the virama counted as word characters, and optional separators
+between letters and digits for OCR ("goa 2023" ↔ "GOA2023").
+
+**Considered:** `ILIKE '%query%'` (what shipped; also matches "cat" inside "vacation" and
+"LOCATION", and scored those hits as perfect matches); a `tsvector` column with the `simple`
+config (needs a schema change and re-index, and its tokenizer doesn't keep merged OCR words
+apart from real ones).
+
+**Why:** the regex runs on the existing pg_trgm GIN indexes, so it works on an already-
+indexed database with no migration. POSIX `[:alnum:]` and Python's `\w` both treat Devanagari
+combining marks as non-letters, which would put a "boundary" inside कुत्ते; listing the
+Unicode ranges explicitly fixes that (tested against Postgres: `tests/test_lexical_sql.py`).
