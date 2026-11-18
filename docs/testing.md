@@ -167,3 +167,16 @@ This prints the best similarity per video for a list of visual and speech querie
 lists to fit your library), plus every transcript, translation and OCR text. It's how the
 numbers in [models.md](models.md#calibration) were measured. Adjust `VISUAL_FLOOR`,
 `SPEECH_FLOOR` and `SPEECH_FLOOR_SHORT` in `vsearch/search.py` if you see misses or false hits.
+
+## On the benchmark-and-ranking branch
+
+The ranking now uses calibrated fusion and data-driven floors ([evaluation.md](evaluation.md)).
+The e2e run on that branch passes **48/50**:
+- `speech 'blow out the candles' finds bday_party.mp4`: bge-m3 scores that paraphrase 0.600,
+  under the new speech floor 0.63 (was 0.60) — the recall the floor trades for 72% fewer
+  answers to unanswerable queries on the benchmark's test split. Not "fixed" by lowering the
+  floor: that would be tuning on the functional tests.
+- `search bar 'park with the dog this evening' at #1`: Whisper's translation varies between
+  runs ("this evening" / "in the evening"), so no exact-phrase match fired, and the search bar
+  only promotes exact matches above Immich's own #1 even when the meaning match is near-certain
+  (similarity 0.925). Same weakness as the benchmark's search-bar R@1; a follow-up.
