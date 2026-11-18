@@ -50,14 +50,27 @@ class Params:
     max_moments: int = 6
 
 
+def with_(params: Params, **changes) -> Params:
+    return replace(params, **changes)
+
+
 # The parameters as first shipped (tuned on four generated clips). The benchmark's baseline
 # and tests/test_ranking_equivalence.py pin these; DEFAULT is what search uses.
 LEGACY = Params()
-DEFAULT = LEGACY
 
+# Fix B, chosen on the benchmark's dev split (eval/tune.py, eval/tuning.md): P(this is the right
+# video | best similarity), fitted per kind with a logistic regression and combined with
+# noisy-OR, so a weak visual match no longer ties an exact spoken one. OCR isn't in the
+# benchmark, so its exact matches use the spoken exact matches' fit.
+CALIBRATION = {
+    "visual/vec": (32.9036, -7.2376),
+    "speech/vec": (24.0630, -17.9826),
+    "speech/exact": (0.0, 3.2581),
+    "text/exact": (0.0, 3.2581),
+    "text/fuzzy": (0.0, 0.0),
+}
+DEFAULT = with_(LEGACY, fusion="calibrated", calibration=CALIBRATION)
 
-def with_(params: Params, **changes) -> Params:
-    return replace(params, **changes)
 
 
 def _rescale(sim: float, cut: float, top: float, lo: float, width: float) -> float:
