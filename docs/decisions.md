@@ -256,3 +256,36 @@ apart from real ones).
 indexed database with no migration. POSIX `[:alnum:]` and Python's `\w` both treat Devanagari
 combining marks as non-letters, which would put a "boundary" inside कुत्ते; listing the
 Unicode ranges explicitly fixes that (tested against Postgres: `tests/test_lexical_sql.py`).
+
+### 19. Calibrated score fusion
+
+**Picked:** for each kind of match (visual frame, spoken meaning, exact words said or written),
+a logistic fit of P(this is the right video | best similarity) on the benchmark's dev split,
+combined across kinds with noisy-OR. `vsearch/ranking.py`, `CALIBRATION`.
+
+**Considered:** the original per-query min-max rescaling with `max + 0.1·rest`; reciprocal rank
+fusion (k = 10, 30, 60).
+
+**Why:** the rescaling made every query's best visual frame score ~1.0, however weak, so it tied
+exact spoken matches (speech alone beat the fused result by 33 points of R@1 on FLEURS). RRF
+ignores how strong a match is and lost to the original on dev. Calibration put the kinds on
+one scale: dev macro-MRR 0.491 → 0.587. Cost, stated: Charades R@1 fell 20.4 → 17.9 on test,
+because Whisper's hallucinated speech in silent clips now carries real weight.
+
+### 20. Thresholds from the benchmark
+
+**Picked:** visual floor 0.09, speech floor 0.63 (also for 1–2 word queries), from the dev
+split's curves (`docs/img/threshold-curves.png`): the lowest no-answer false-positive rate
+within 1 point of macro R@10.
+
+**Why:** the old floors came from a handful of synthetic sentences with a 0.017 margin. On test
+the new ones cut answers to unanswerable queries from 25.7% to 7.1%. The short-query floor
+was *not* lowered to the tuner's pick (0.50): no no-answer query has under 3 words, so the
+benchmark can't see what that costs, and the floor exists to be stricter (reported as a
+not-shipped variant).
+
+### 21. LLM query planner: not built yet
+
+A local LLM turning "Aai singing at Priya's birthday in Goa last year" into filters was planned
+(off by default, schema-only output, owner scoping kept in SQL) and cut for time. The benchmark
+is the prerequisite: a planner now has numbers to beat.

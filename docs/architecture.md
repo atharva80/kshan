@@ -284,21 +284,23 @@ correct top result. The result held for thresholds 0.75–0.9; 0.82 sits in the 
 
 ## The search side
 
-`search.run()` collects **moments** `(video, ms, kind, score, text)` from up to three sources,
-filtered to the requesting user's live, visible videos:
+`search.py` only fetches **candidates** `(video, ms, kind, method, similarity, text)` from up to
+three sources, filtered to the requesting user's live, visible videos; `ranking.py` (pure, stdlib)
+applies thresholds, scores, fusion and moment grouping. The benchmark (`eval/`) re-ranks saved
+candidates with the same `ranking.py`, so its numbers are what the live code does.
 
-| Kind | Query | Scoring |
+| Kind | Candidates | Kept if |
 |---|---|---|
-| **visual** ("Seen") | query text → Immich ML CLIP text vector → HNSW over `frame.embedding` (`ef_search` 400, iterative scan) | keep frames ≥ max(0.07, best − 0.06), and within 0.03 of their video's best; scaled to 0.4–1.0 |
-| **speech** ("Said") | 1) `ILIKE` on transcript **and** translation → 1.0. 2) bge-m3 vector → HNSW over `segment.embedding` | meaning matches need ≥ 0.60 (≥ 0.65 for 1–2 word queries) and to be within 0.15 of the best; scaled to 0.4–0.85 so exact words outrank them |
-| **text** ("Written") | `ILIKE` on frame OCR, also with spaces removed ("GOA2023") → 1.0. Strict trigram similarity for misreads, only for queries of 5+ characters → 0.8 | |
+| **visual** ("Seen") | query → Immich ML CLIP text vector → HNSW over `frame.embedding` (`ef_search` 400, iterative scan), top 400 frames | similarity ≥ max(0.09, best − 0.06) and within 0.03 of the video's own best frame |
+| **speech** ("Said") | 1) the query's words, **whole words**, in transcript or English translation (`lexical.py` regex on the trigram index) 2) bge-m3 vector → HNSW over `segment.embedding`, top 100 | meaning matches ≥ 0.63 and within 0.15 of the best |
+| **text** ("Written") | the query's words, whole words, in frame OCR, with separators optional between letters and digits ("goa 2023" ↔ "GOA2023"); strict trigram similarity for misreads, queries of 5+ characters | |
 
-The thresholds come from measured data ([models.md](models.md#calibration)).
-
-**Fusion per video:** the score is the best kind's score plus 0.1 × each other kind's score, so
-a video that matches in several ways ranks higher. Moments of the same kind closer than 2.5 s
-collapse into one, and up to 6 moments are returned per video. Each moment gets the nearest
-sampled frame as its thumbnail.
+**Fusion per video:** each kind's best match is turned into P(right video) by a logistic fit
+per kind and method (`ranking.CALIBRATION`, fitted on the benchmark's dev split), and kinds
+combine by noisy-OR: `1 − Π(1 − p)`. Floors and calibration come from the benchmark
+([evaluation.md](evaluation.md), decisions 19–20); the original rescaled scores and
+`max + 0.1·rest` are kept as `ranking.LEGACY`. Moments of the same kind closer than 2.5 s
+collapse into one, up to 6 per video, each with the nearest sampled frame as its thumbnail.
 
 ## Inside Immich's own search bar
 
@@ -465,10 +467,14 @@ long runs need the app open, the screen on (it holds a wake lock) and the phone 
 | `vsearch/speech.py` | ffmpeg audio decode, Whisper transcribe + translate, hallucination filter, VRAM lifecycle |
 | `vsearch/textemb.py` | bge-m3 |
 | `vsearch/db.py` | schema, Immich config/schema checks, pooling, save + merge + reconcile |
-| `vsearch/search.py` | the three moment sources, thresholds, fusion |
+| `vsearch/search.py` | the three candidate sources (SQL) |
+| `vsearch/ranking.py` | thresholds, scores, calibrated fusion, moment grouping (pure; used by eval/) |
+| `vsearch/lexical.py` | whole-word phrase patterns for exact speech/OCR matches |
 | `vsearch/web.py` | FastAPI routes, auth, prefix handling, playback proxy, search-bar hook, pendrive progress |
 | `vsearch/immich_search.py` | which search-bar requests get merged, and the blend order |
 | `vsearch/static/index.html` | the whole page: Search + Pendrives tabs (vanilla JS, mobile-first, light/dark) |
 | `vsearch/static/lib.js` | streaming SHA-1, filename dates, media filter |
 | `vsearch/static/sidebar.js` | the two sidebar entries inside Immich's web UI |
 | `vsearch/config.py` | every setting, from environment variables |
+| `eval/` | the benchmark: data scripts, load/live/collect, tune, run, metrics, report |
+| `tests/` | unit tests (ranking equivalence, fusion, metrics, lexical incl. real Postgres); CI in `.github/workflows/ci.yml` |

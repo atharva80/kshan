@@ -4,7 +4,43 @@ How well vsearch finds the right video, and the right second in it, measured on 
 with a reproducible pipeline. Every number here comes from `eval/results/<date>-<commit>.json`,
 written by `eval/run.py`; the tables are in [eval/results.md](../eval/results.md).
 
-<!-- RESULTS -->
+## Results (test split, 452 queries)
+
+From `eval/results/2026-11-19-03fa714.json`; full tables in [eval/results.md](../eval/results.md).
+
+| | Charades R@1 / R@10 | moment@1 | FLEURS sentence R@1 | FLEURS keyword R@1 | no-answer FP | p50 / p95 |
+|---|---|---|---|---|---|---|
+| Plain Immich, before indexing | 9.3 / 35.8 | – | 0.0 | 0.0 | 100% | 23 / 28 ms |
+| Plain Immich, after write-back (phone app) | 10.5 / 42.6 | – | 0.0 | 0.0 | 100% | 38 / 47 ms |
+| vsearch as it was | 20.4 / 56.2 | 14.2 | 63.6 | 25.5 | 25.7% | 96 / 162 ms |
+| **vsearch now (fixes A+B+C)** | **17.9 / 51.9** | **13.0** | **92.7** | **50.0** | **7.1%** | 105 / 195 ms |
+| Search bar via vsearch, now | 10.5 / 51.2 | – | 11.8 (R@10 93.6) | 50.0 | 100% | 136 / 184 ms |
+
+**The three fixes the benchmark drove** (test split, each on top of the previous):
+
+| Fix | What changed | Effect |
+|---|---|---|
+| A. Whole-word matching | `ILIKE '%q%'` → word-boundary phrase regex | Keyword R@1 25.5 → 26.4; nothing else moved. The benchmark's queries rarely hit the substring bug; kept for correctness (regression tests). |
+| B. Calibrated fusion | per-query rescaling + `max+0.1·rest` → per-kind logistic P(right video), noisy-OR | FLEURS sentence R@1 63.6 → 96.4, keyword 26.4 → 50.0; **Charades R@1 20.4 → 17.9** (Whisper hallucinates speech in silent Charades clips, which now competes with visual matches). RRF was tried and lost to the original on dev. |
+| C. Floors from data | visual 0.07 → 0.09, speech 0.60 → 0.63 | No-answer FP 25.7% → 7.1%; FLEURS sentence R@1 96.4 → 92.7, Charades R@10 54.3 → 51.9. |
+
+**What the ablations say:** speech alone found FLEURS sentences at R@1 96.4 while the original
+fusion reached only 63.6: the per-query rescaling gave the best visual frame ~1.0 for every
+query, so random visual matches tied real spoken ones. Without the translation pass, sentence
+R@10 drops 97.3 → 86.4 and keyword R@10 50.0 → 29.1.
+
+**Other findings:**
+- Marathi is the weak spot: one-word keyword R@1 18.9 vs 43.2 Hindi and 88.9 English. A rare
+  English word has to survive Marathi transcription *and* translation.
+- The search bar keeps Immich's own top result first unless a video matched the exact words,
+  so English sentence queries rarely reach #1 there (R@1 11.8) though R@10 is 93.6. A follow-up.
+- Indexing: 1.15 h of video, median 17.3 s of processing per minute of video (3.7 s per clip),
+  0 failures. Wall time (47 min) includes restarts: on an 8 GB card Whisper large-v3 only fits
+  next to SigLIP2 when Immich's text model isn't loaded too; searching while indexing pushes
+  Whisper to CPU, and it stays there until it goes idle. A real limitation on small GPUs.
+- The live API reproduces the offline re-ranking's top 10 on 99.8% (before) and 100% (after
+  the fixes) of queries, so the fix rows are what the running code does.
+
 
 ## The task
 
@@ -108,6 +144,10 @@ The test stack borrows the real stack's ML container over the `immich_default` n
   family video has overlapping, code-mixed Hindi/Marathi/English conversation and noise, which
   will be harder for Whisper.
 - **The keyword queries are mechanical** (highest-IDF words); people type differently.
-- **One library size.** Results are for ~1,000 assets; larger libraries make ranking harder.
+- **Small and one library size.** 230 clips + 35 photos (a subset, for indexing time); 452 test
+  queries, ~37 per FLEURS language and query type, so differences of a few points are noise.
+  Larger libraries make ranking harder.
+- **No on-screen-text or short no-answer queries.** OCR's calibration is borrowed from speech,
+  and the 1–2 word speech floor couldn't be tuned (it was held at the normal floor).
 - **The original four functional-test clips** (README, `test/`) are text-to-speech and
   generated video; they check that features work, not search quality.

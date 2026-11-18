@@ -17,6 +17,31 @@ upload whole pendrives, each tracked and in its own album.
 It runs entirely on your own machine and GPU, with no cloud services. It installs as one extra
 container next to Immich and needs no new app on anyone's phone.
 
+<!-- demo GIF: docs/img/demo.gif (to record; see the shot list) -->
+
+## Results
+
+Measured on a public benchmark: 80 [Charades-STA](https://prior.allenai.org/projects/charades)
+videos with time-stamped sentence queries, and [FLEURS](https://huggingface.co/datasets/google/fleurs)
+read speech in Hindi, Marathi and English searched with **English** queries, plus 100 queries
+with no answer. Every query searches the whole library in a throwaway Immich. Held-out
+**test split** (452 queries); thresholds and fusion were tuned on dev only.
+
+| Test split | Plain Immich (phone app) | vsearch |
+|---|---:|---:|
+| Charades: right video first / in top 10 | 10.5% / 42.6% | **17.9% / 51.9%** |
+| Charades: plays from inside the right moment (±1 s) | – | **13.0%** |
+| FLEURS, English sentence → Hindi / Marathi / English clip first | 0% / 0% / 0% | **91.9% / 86.5% / 100%** |
+| FLEURS, one-word keyword → clip first | 0% | **50.0%** |
+| Queries with no answer that still return something | 100% | **7.1%** |
+| Latency p50 / p95 | 38 / 47 ms | 105 / 195 ms |
+
+Plain Immich here already includes vsearch's write-back (one pooled vector per video), which on
+its own lifts Charades top-10 from 35.8% to 42.6%. Full tables, ablations and the three fixes
+the benchmark drove (whole-word matching, calibrated fusion, data-driven thresholds), each with
+its before/after: [eval/results.md](eval/results.md). Datasets, metrics and limitations:
+[docs/evaluation.md](docs/evaluation.md). Reproduce: `make eval-data`, then the steps there.
+
 ---
 
 ## The problem
@@ -106,9 +131,10 @@ flowchart LR
 10. **It keeps its results in place.** If Immich re-runs a job and overwrites a video's entries,
    the next pass (30 s later) puts them back.
 
-## Results
+## Functional tests (four generated clips)
 
-These come from a throwaway Immich with 4 generated test videos among 36 photos
+These check that each feature works end to end; they are **not** evidence of search quality
+(that's the benchmark above). A throwaway Immich with 4 generated test videos among 36 photos
 ([testing](docs/testing.md)). **50/50 end-to-end checks pass**, plus browser-tested pendrive uploads.
 
 **Immich's own search bar**, the same box she types into in the app:
@@ -172,6 +198,7 @@ The full walkthrough is in **[docs/setup.md](docs/setup.md)**.
 | [User guide](docs/user-guide.md) | For the person using it: connecting, uploading phone photos and pendrives, searching |
 | [Architecture](docs/architecture.md) | How it works inside: pipeline, data model, write-back, scene pooling, search scoring, auth |
 | [Models](docs/models.md) | Which models and why, with the benchmarks and calibration numbers |
+| [Evaluation](docs/evaluation.md) | The public benchmark: datasets, splits, metrics, results, the fixes it drove, limitations |
 | [Testing](docs/testing.md) | The end-to-end harness, test media, all 50 checks, pendrive upload tests, bugs found along the way |
 | [Operations](docs/operations.md) | Updates, backups, monitoring, re-indexing, uninstalling, troubleshooting |
 | [Decisions](docs/decisions.md) | Every fork in the road: what was considered, what was picked, why |
