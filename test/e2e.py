@@ -85,7 +85,34 @@ def smart_rank(query, names):
     return {n: (order.index(n) + 1 if n in order else None) for n in names}
 
 
+def all_assets():
+    """Every asset's file name -> id, paging through Immich's metadata search."""
+    out, page = {}, 1
+    while page:
+        _, body, _ = call("POST", f"{IMMICH}/search/metadata", {"size": 1000, "page": page}, key_headers())
+        out.update({a["originalFileName"]: a["id"] for a in body["assets"]["items"]})
+        page = int(body["assets"]["nextPage"]) if body["assets"].get("nextPage") else None
+    return out
+
+
 def setup(library: Path):
+    ensure_admin()
+    upload(library)
+    names = sorted(assets_by_name())
+    print("library:", names)
+    baseline = {q: smart_rank(q, names) for q, (_, _, kind) in EXPECT.items() if kind == "visual"}
+    BASELINE.write_text(json.dumps(baseline, indent=1))
+    print("baseline Immich smart-search ranks (before the indexer):")
+    for q, ranks in baseline.items():
+        name = EXPECT[q][0]
+        name = next(iter(name)) if isinstance(name, dict) else name
+        print(f"  {q!r}: {name} at #{ranks[name]}")
+
+
+def ensure_admin(config_changes=None):
+    """Test admin + API key (once), and the test Immich on the same CLIP model as the real one.
+    config_changes(config) may adjust Immich's system config further (eval/ turns off jobs it
+    doesn't need)."""
     if not CREDS.exists():
         password = secrets.token_urlsafe(18)
         creds = {"email": "admin@vtest.local", "password": password}
@@ -104,29 +131,24 @@ def setup(library: Path):
         print("created test admin (credentials in .vtest-credentials)")
 
     _, config, _ = call("GET", f"{IMMICH}/system-config", headers=key_headers())
-    if config["machineLearning"]["clip"]["modelName"] != CLIP_MODEL:
-        config["machineLearning"]["clip"]["modelName"] = CLIP_MODEL
+    before = json.dumps(config, sort_keys=True)
+    config["machineLearning"]["clip"]["modelName"] = CLIP_MODEL
+    if config_changes:
+        config_changes(config)
+    if json.dumps(config, sort_keys=True) != before:
         status, body, _ = call("PUT", f"{IMMICH}/system-config", config, key_headers())
         assert status == 200, (status, body)
-        print("test Immich now uses", CLIP_MODEL)
+        print("test Immich config updated (CLIP model:", CLIP_MODEL + ")")
 
+
+def upload(*paths: Path, timeout=900):
     CLI_DIR.mkdir(parents=True, exist_ok=True)
     cli = ["npx", "--yes", "@immich/cli", "-d", str(CLI_DIR)]
     subprocess.run(cli + ["login", IMMICH, key_headers()["x-api-key"]], check=True, capture_output=True)
-    out = subprocess.run(cli + ["upload", "--recursive", str(library)], check=True, capture_output=True, text=True)
+    out = subprocess.run(cli + ["upload", "--recursive", *map(str, paths)], check=True, capture_output=True, text=True)
     print("upload:", out.stdout.strip().splitlines()[-1] if out.stdout.strip() else "done")
     time.sleep(5)
-    wait_idle()
-
-    names = sorted(assets_by_name())
-    print("library:", names)
-    baseline = {q: smart_rank(q, names) for q, (_, _, kind) in EXPECT.items() if kind == "visual"}
-    BASELINE.write_text(json.dumps(baseline, indent=1))
-    print("baseline Immich smart-search ranks (before the indexer):")
-    for q, ranks in baseline.items():
-        name = EXPECT[q][0]
-        name = next(iter(name)) if isinstance(name, dict) else name
-        print(f"  {q!r}: {name} at #{ranks[name]}")
+    wait_idle(timeout)
 
 
 class Report:

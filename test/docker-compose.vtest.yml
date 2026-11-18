@@ -41,7 +41,9 @@ services:
     shm_size: 128mb
 
   vtest-vsearch:
-    image: immich-vsearch:local
+    # Its own tag, built from this checkout, so testing never rebuilds the real stack's image.
+    image: immich-vsearch:bench
+    build: ..
     profiles: [indexer]
     environment:
       <<: *db
@@ -55,6 +57,9 @@ services:
       - vtest-library:/data:ro
       - vtest-state:/state
       - vsearch-models:/models
+      # the checkout's code (no rebuild per change) and the benchmark (eval/collect.py runs in here)
+      - ../vsearch:/app/vsearch:ro
+      - ../eval:/eval
     ports:
       - '127.0.0.1:2294:2284'
     deploy:
