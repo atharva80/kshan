@@ -21,9 +21,15 @@ All sources, sha256 hashes, licences, selection rules and counts are recorded in
 
 | Source | What it tests | Licence | Used |
 |---|---|---|---|
-| [Charades](https://prior.allenai.org/projects/charades) videos + Charades-STA test annotations (TALL, Gao et al. 2017) | Finding what's **on screen**: indoor everyday-activity clips (~30 s) with sentence queries and start/end times | Charades: non-commercial use only. Clips are fetched one by one from AI2's archive with HTTP range requests (`eval/data_charades.py`), never redistributed. | 300 test-set videos, seed 2026, with all their queries |
+| [Charades](https://prior.allenai.org/projects/charades) videos + Charades-STA test annotations (TALL, Gao et al. 2017) | Finding what's **on screen**: indoor everyday-activity clips (~30 s) with sentence queries and start/end times | Charades: non-commercial use only. Clips are fetched one by one from AI2's archive with HTTP range requests (`eval/data_charades.py`), never redistributed. | 300 test-set videos picked with seed 2026 (all their queries); **80 of them indexed** (see below) |
 | [FLEURS](https://huggingface.co/datasets/google/fleurs) (Conneau et al. 2022), `hi_in`, `mr_in`, `en_us` test splits | Finding what's **said**, in Hindi and Marathi, from **English** queries; English is the in-language control | CC BY 4.0 | Disjoint sets of FLoRes sentence ids per language; each recording wrapped in an mp4 with a plain grey frame so it goes through the real pipeline and gives the visual model and OCR nothing to match |
 | 35 distractor photos (`test/make_dummy.py`, Wikimedia Commons crops) | Photos competing in the same search, as in a real library | CC licences, see `test/fetch_media.py` | all |
+
+**Subset for indexing time.** To keep indexing near 30 minutes on one 8 GB laptop GPU,
+`eval/subset.py` keeps a seeded random 80 of the 300 Charades videos and 50 of the 88 FLEURS
+clips per language (seed 2026; every kept item keeps its split), plus all 100 no-answer
+queries: 230 clips and 606 queries (452 test). `make eval-data` still builds the full set;
+`eval/data/subset.json` lists what was kept.
 
 ## Queries
 
