@@ -215,8 +215,8 @@ def test_limit_matches_old_group():
 def test_short_query_uses_the_higher_speech_floor(query):
     """1-2 word queries need 0.65, longer ones 0.60 (a 0.62 hit passes only for the long query)."""
     hits = [Hit("a", 0, "speech", "vec", 0.62, "x")]
-    assert [v["assetId"] for v in ranking.rank(hits, query)] == [v["assetId"] for v in old_rank(hits, query)]
-    assert bool(ranking.rank(hits, query)) == (len(query.split()) > 2)
+    assert [v["assetId"] for v in ranking.rank(hits, query, LEGACY)] == [v["assetId"] for v in old_rank(hits, query)]
+    assert bool(ranking.rank(hits, query, LEGACY)) == (len(query.split()) > 2)
 
 
 def test_old_helper_is_main_search():

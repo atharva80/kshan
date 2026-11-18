@@ -129,7 +129,7 @@ class TestFilters:
         assert {v["assetId"] for v in got} == {"a", "b"}
 
     def test_translated_moments_are_prefixed(self):
-        (video,) = ranking.rank([said("a", text="a dog barks", translated=True)], "dog")
+        (video,) = ranking.rank([said("a", text="a dog barks", translated=True)], "dog", LEGACY)
         assert video["best"]["text"] == "EN: a dog barks"
 
     @pytest.mark.parametrize("kinds, expected", [
@@ -155,86 +155,95 @@ class TestFilters:
 # --- exact flag -------------------------------------------------------------------------------
 def test_exact_flag_only_for_method_exact():
     hits = [vis("v"), said("se"), said("sv", method="vec", sim=0.9), ocr("te"), ocr("tf", method="fuzzy", sim=0.7)]
-    got = by_asset(ranking.rank(hits, "x y z"))
+    got = by_asset(ranking.rank(hits, "x y z", LEGACY))
     assert {a: v["best"]["exact"] for a, v in got.items()} == \
         {"v": False, "se": True, "sv": False, "te": True, "tf": False}
 
 
 def test_exact_flag_per_moment():
     hits = [said("a", ms=0), said("a", ms=60_000, method="vec", sim=0.9, text="y")]
-    (video,) = ranking.rank(hits, "x y z")
+    (video,) = ranking.rank(hits, "x y z", LEGACY)
     assert [(m["ms"], m["exact"]) for m in video["moments"]] == [(0, True), (60_000, False)]
 
 
 # --- thresholds, grouping ---------------------------------------------------------------------
 class TestScoreAndGroup:
     def test_visual_below_floor_is_dropped(self):
-        assert ranking.rank([vis("a", 0.06)], "x") == []
+        assert ranking.rank([vis("a", 0.06)], "x", LEGACY) == []
 
     def test_visual_spread_drops_videos_far_below_the_best(self):
-        got = ranking.rank([vis("a", 0.15), vis("b", 0.10), vis("c", 0.08)], "x")
+        got = ranking.rank([vis("a", 0.15), vis("b", 0.10), vis("c", 0.08)], "x", LEGACY)
         assert [v["assetId"] for v in got] == ["a", "b"]  # cut = 0.15 - 0.06 = 0.09
 
     def test_visual_frames_within_a_video_must_be_near_its_best(self):
         # all three clear the cut (0.09), but only frames within 0.03 of the video's best (0.15) stay
         hits = [vis("a", 0.15, ms=0), vis("a", 0.13, ms=10_000), vis("a", 0.10, ms=20_000)]
-        (video,) = ranking.rank(hits, "x")
+        (video,) = ranking.rank(hits, "x", LEGACY)
         assert [m["ms"] for m in video["moments"]] == [0, 10_000]
 
     def test_exact_speech_scores_one_and_hides_the_same_segment_semantically(self):
         hits = [said("a", ms=1000), said("a", ms=1000, method="vec", sim=0.9)]
-        (video,) = ranking.rank(hits, "x y z")
-        assert [h.method for h, _ in ranking.score(hits, "x y z")] == ["exact"]  # the dedup is in score()
+        (video,) = ranking.rank(hits, "x y z", LEGACY)
+        assert [h.method for h, _ in ranking.score(hits, "x y z", LEGACY)] == ["exact"]  # the dedup is in score()
         assert len(video["moments"]) == 1 and video["best"]["score"] == 1.0
 
     def test_speech_vec_rescale_range(self):
         # three-word query: floor 0.60, spread 0.15 -> cut 0.75; scores run 0.4 (cut) to 0.85 (top)
         hits = [said("a", method="vec", sim=0.9), said("b", method="vec", sim=0.76), said("c", method="vec", sim=0.7)]
-        got = by_asset(ranking.rank(hits, "x y z"))
+        got = by_asset(ranking.rank(hits, "x y z", LEGACY))
         assert got["a"]["best"]["score"] == 0.85
         assert got["b"]["best"]["score"] == pytest.approx(0.4 + 0.45 * 0.01 / 0.15, abs=1e-3)
         assert "c" not in got
 
     def test_text_scores(self):
         hits = [ocr("a"), ocr("b", method="fuzzy", sim=0.3)]
-        got = by_asset(ranking.rank(hits, "x"))
+        got = by_asset(ranking.rank(hits, "x", LEGACY))
         assert got["a"]["score"] == 1.0
         assert got["b"]["score"] == 0.8  # fuzzy is a flat 0.8 whatever pg_trgm said
 
     def test_moments_within_gap_collapse_per_kind_only(self):
         hits = [ocr("a", ms=1000, text="1"), ocr("a", ms=3000, text="2"), said("a", ms=1500)]
-        (video,) = ranking.rank(hits, "x")
+        (video,) = ranking.rank(hits, "x", LEGACY)
         assert sorted((m["kind"], m["ms"]) for m in video["moments"]) == [("speech", 1500), ("text", 1000)]
         # exactly the gap apart is not "farther than"
         hits = [ocr("a", ms=0), ocr("a", ms=2500), ocr("a", ms=5001)]
-        (video,) = ranking.rank(hits, "x")
+        (video,) = ranking.rank(hits, "x", LEGACY)
         assert [m["ms"] for m in video["moments"]] == [0, 5001]
 
     def test_max_moments(self):
         hits = [ocr("a", ms=i * 10_000) for i in range(10)]
-        (video,) = ranking.rank(hits, "x")
+        (video,) = ranking.rank(hits, "x", LEGACY)
         assert len(video["moments"]) == 6
         assert len(ranking.rank(hits, "x", with_(LEGACY, max_moments=2))[0]["moments"]) == 2
 
     def test_moments_sorted_by_time_best_is_highest_score(self):
         hits = [said("a", ms=9000, method="vec", sim=0.8, text="x"), said("a", ms=0, method="vec", sim=0.9, text="y")]
-        (video,) = ranking.rank(hits, "x y z")
+        (video,) = ranking.rank(hits, "x y z", LEGACY)
         assert [m["ms"] for m in video["moments"]] == [0, 9000]
         assert video["best"]["ms"] == 0
 
     def test_limit(self):
         hits = [ocr(f"a{i:02d}") for i in range(10)]
-        assert len(ranking.rank(hits, "x", limit=3)) == 3
+        assert len(ranking.rank(hits, "x", LEGACY, limit=3)) == 3
 
     def test_videos_sorted_by_score_descending(self):
         hits = [ocr("fuzzy", method="fuzzy", sim=0.5), said("vec", method="vec", sim=0.9), ocr("exact")]
-        got = ranking.rank(hits, "x y z")
+        got = ranking.rank(hits, "x y z", LEGACY)
         assert [v["assetId"] for v in got] == ["exact", "vec", "fuzzy"]  # 1.0, 0.85, 0.8
 
     def test_no_hits(self):
-        assert ranking.rank([], "anything") == []
+        assert ranking.rank([], "anything", LEGACY) == []
 
     def test_asset_id_is_stringified(self):
         import uuid
         u = uuid.uuid4()
-        assert ranking.rank([ocr(u)], "x")[0]["assetId"] == str(u)
+        assert ranking.rank([ocr(u)], "x", LEGACY)[0]["assetId"] == str(u)
+
+
+def test_shipped_defaults_are_the_benchmark_fixes():
+    # Fixes B and C (eval/tuning.md); LEGACY keeps the original parameters for the baseline.
+    d = ranking.DEFAULT
+    assert d.fusion == "calibrated" and set(d.calibration) >= {"visual/vec", "speech/vec", "speech/exact", "text/exact"}
+    assert (d.visual_floor, d.speech_floor, d.speech_floor_short) == (0.09, 0.63, 0.63)
+    assert d.speech_floor_short >= d.speech_floor  # never looser for 1-2 word queries
+    assert ranking.LEGACY.fusion == "legacy" and ranking.LEGACY.visual_floor == 0.07
