@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-UA = "immich-video-search-tests/1.0 (https://github.com/atharva80/immich-video-search)"
+UA = "kshan-tests/1.0 (https://github.com/atharva80/kshan)"
 
 PHOTOS = {
     "cat": "File:Felis catus-cat on snow.jpg",

@@ -91,7 +91,7 @@ docker run --rm --gpus all --entrypoint nvidia-smi ghcr.io/immich-app/immich-mac
 
 ```bash
 cd /srv/immich/app
-git clone https://github.com/atharva80/immich-video-search vsearch
+git clone https://github.com/atharva80/kshan vsearch
 cp vsearch/deploy/docker-compose.override.yml .
 sudo mkdir -p /srv/immich/vsearch
 docker volume create immich-vsearch-models
