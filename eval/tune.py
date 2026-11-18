@@ -101,7 +101,7 @@ def calibrate(prepared, assets, params) -> dict:
 def main():
     prepared, assets = prepare("substr")
     prepared_word, _ = prepare("word")
-    base = ranking.DEFAULT
+    base = ranking.LEGACY  # the shipped defaults may change; the baseline must not
     report = {"baseline": score_dev(prepared, assets, base), "fix A": score_dev(prepared_word, assets, base)}
     print("dev baseline:", report["baseline"])
     print("dev fix A:   ", report["fix A"])
@@ -111,6 +111,11 @@ def main():
     for k in (10, 30, 60):
         candidates[f"rrf k={k}"] = ranking.with_(base, fusion="rrf", rrf_k=k)
     calib = calibrate(prepared_word, assets, base)
+    # The benchmark has no on-screen-text queries, so OCR gets no fit of its own: an exact OCR
+    # match borrows the spoken exact match's (both mean "the query's words are there"), and a
+    # fuzzy one stays at even odds.
+    calib.setdefault("text/exact", calib.get("speech/exact", (0.0, 0.0)))
+    calib.setdefault("text/fuzzy", (0.0, 0.0))
     candidates["calibrated"] = ranking.with_(base, fusion="calibrated", calibration=calib)
     fusion = {name: score_dev(prepared_word, assets, p) for name, p in candidates.items()}
     for name, s in fusion.items():
@@ -132,7 +137,17 @@ def main():
         "speech_floor": [round(0.50 + 0.01 * i, 2) for i in range(26)],
         "speech_floor_short": [round(0.50 + 0.01 * i, 2) for i in range(31)],
     }
+    free_short = None
     for field, grid in grids.items():
+        if field == "speech_floor_short":
+            # Every no-answer query has 3+ words, so the benchmark can't see what a looser floor
+            # for 1-2 word queries costs (it exists because "a cat" embedded close to a dog
+            # sentence). Never let it go below the normal floor; the unconstrained pick is
+            # reported as a variant.
+            free = [{"value": v, **score_dev(prepared_word, assets, ranking.with_(c, **{field: v}))} for v in grid]
+            ok_free = [pt for pt in free if pt["macro_R@10"] >= target]
+            free_short = min(ok_free, key=lambda pt: (pt["noans_FP"], -pt["macro_R@10"]))["value"] if ok_free else None
+            grid = [v for v in grid if v >= c.speech_floor]
         points = []
         for value in grid:
             s = score_dev(prepared_word, assets, ranking.with_(c, **{field: value}))
@@ -143,7 +158,7 @@ def main():
         if best:
             c = ranking.with_(c, **{field: best["value"]})
         print(f"dev {field}: chose {getattr(c, field)}")
-    report["fix C"] = {"untuned": untuned, "chosen": {f: getattr(c, f) for f in grids},
+    report["fix C"] = report.get("fix C", {}) | {"untuned": untuned, "chosen": {f: getattr(c, f) for f in grids},
                        "tuned": score_dev(prepared_word, assets, c), "curves": curves}
 
     def spec(p, lex, desc):
@@ -161,6 +176,12 @@ def main():
         "fix A+B+C: tuned floors": spec(c, "word", "A+B, plus visual/speech floors chosen on dev "
                                         + json.dumps({f: getattr(c, f) for f in grids})),
     }
+    if free_short is not None and free_short != c.speech_floor_short:
+        tuned["variant: C with a free short-query floor (not shipped)"] = spec(
+            ranking.with_(c, speech_floor_short=free_short), "word",
+            f"short-query floor {free_short}: unconstrained dev pick, whose false-positive cost the "
+            "benchmark can't measure (no 1-2 word no-answer queries)")
+        report["fix C"]["free_short_floor"] = free_short
     (EVAL / "tuned.json").write_text(json.dumps(tuned, indent=1))
     (DATA / "tune_report.json").write_text(json.dumps(report, indent=1))
     (EVAL / "tuning.md").write_text(tuning_md(report))

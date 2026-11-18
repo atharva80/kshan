@@ -1,0 +1,100 @@
+{
+ "fix A: whole-word match": {
+  "params": {},
+  "lexical": "word",
+  "description": "speech and OCR exact matches only on word boundaries (vsearch/lexical.py) instead of ILIKE substring"
+ },
+ "fix A+B: calibrated fusion": {
+  "params": {
+   "fusion": "calibrated",
+   "calibration": {
+    "visual/vec": [
+     32.903597991707734,
+     -7.237624309202301
+    ],
+    "speech/vec": [
+     24.062979539495874,
+     -17.9825649090643
+    ],
+    "speech/exact": [
+     0.0,
+     3.2580965380214804
+    ],
+    "text/exact": [
+     0.0,
+     3.2580965380214804
+    ],
+    "text/fuzzy": [
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "lexical": "word",
+  "description": "A, plus score fusion = calibrated (chosen on dev)"
+ },
+ "fix A+B+C: tuned floors": {
+  "params": {
+   "visual_floor": 0.09,
+   "speech_floor": 0.63,
+   "speech_floor_short": 0.63,
+   "fusion": "calibrated",
+   "calibration": {
+    "visual/vec": [
+     32.903597991707734,
+     -7.237624309202301
+    ],
+    "speech/vec": [
+     24.062979539495874,
+     -17.9825649090643
+    ],
+    "speech/exact": [
+     0.0,
+     3.2580965380214804
+    ],
+    "text/exact": [
+     0.0,
+     3.2580965380214804
+    ],
+    "text/fuzzy": [
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "lexical": "word",
+  "description": "A+B, plus visual/speech floors chosen on dev {\"visual_floor\": 0.09, \"speech_floor\": 0.63, \"speech_floor_short\": 0.63}"
+ },
+ "variant: C with a free short-query floor (not shipped)": {
+  "params": {
+   "visual_floor": 0.09,
+   "speech_floor": 0.63,
+   "speech_floor_short": 0.5,
+   "fusion": "calibrated",
+   "calibration": {
+    "visual/vec": [
+     32.903597991707734,
+     -7.237624309202301
+    ],
+    "speech/vec": [
+     24.062979539495874,
+     -17.9825649090643
+    ],
+    "speech/exact": [
+     0.0,
+     3.2580965380214804
+    ],
+    "text/exact": [
+     0.0,
+     3.2580965380214804
+    ],
+    "text/fuzzy": [
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "lexical": "word",
+  "description": "short-query floor 0.5: unconstrained dev pick, whose false-positive cost the benchmark can't measure (no 1-2 word no-answer queries)"
+ }
+}

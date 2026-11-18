@@ -40,7 +40,7 @@ def load_hits(cand: dict, mode: str) -> list[Hit]:
 
 def configs() -> dict:
     """name -> (Params, lexical mode, description). The fixes' tuned settings come from tune.py."""
-    base = ranking.DEFAULT
+    base = ranking.LEGACY  # the shipped defaults may change; the baseline must not
     out = {
         "vsearch": (base, "substr", "as shipped: substring lexical match, rescaled scores, max+0.1*rest"),
         "ablation: visual only": (ranking.with_(base, kinds=("visual",)), "substr", ""),

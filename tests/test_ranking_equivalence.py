@@ -9,7 +9,7 @@ import random
 import pytest
 
 from vsearch import ranking
-from vsearch.ranking import DEFAULT, Hit
+from vsearch.ranking import LEGACY, Hit
 
 # --- main's constants -------------------------------------------------------------------------
 VISUAL_FLOOR = 0.07
@@ -175,7 +175,7 @@ def test_rank_matches_the_pre_refactor_search():
     for i in range(N_CASES):
         hits, query = make_case(rng)
         old = old_rank(hits, query)
-        new = ranking.rank(hits, query, DEFAULT)
+        new = ranking.rank(hits, query, LEGACY)
 
         label = f"case {i}: query={query!r}, {len(hits)} hits"
         assert [v["assetId"] for v in new] == [v["assetId"] for v in old], f"video order differs ({label})"
@@ -207,7 +207,7 @@ def test_limit_matches_old_group():
         hits, query = make_case(rng)
         for limit in (1, 3, 40):
             old = old_rank(hits, query, limit)
-            new = ranking.rank(hits, query, DEFAULT, limit)
+            new = ranking.rank(hits, query, LEGACY, limit)
             assert [old_fields(v) for v in new] == [old_fields(v) for v in old]
 
 
@@ -221,7 +221,7 @@ def test_short_query_uses_the_higher_speech_floor(query):
 
 def test_old_helper_is_main_search():
     """Guard the guard: the fixture constants above must stay in step with the live defaults."""
-    p = DEFAULT
+    p = LEGACY
     assert (p.visual_floor, p.visual_spread, p.speech_floor, p.speech_floor_short, p.speech_spread) == \
            (VISUAL_FLOOR, VISUAL_SPREAD, SPEECH_FLOOR, SPEECH_FLOOR_SHORT, SPEECH_SPREAD)
     assert (p.moment_gap_ms, p.max_moments, p.fuzzy_score, p.fusion) == (MOMENT_GAP_MS, MAX_MOMENTS, 0.8, "legacy")

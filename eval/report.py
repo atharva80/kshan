@@ -56,7 +56,7 @@ def markdown(out: dict, filename: str) -> str:
     systems = out["systems"]
     main = [n for n in ("immich_before", "immich_after", "vsearch (live)", "vsearch", "proxy (live)") if n in systems]
     ablations = ["vsearch"] + [n for n in systems if n.startswith("ablation")]
-    fixes = ["vsearch"] + [n for n in systems if n.startswith("fix")]
+    fixes = ["vsearch"] + [n for n in systems if n.startswith(("fix", "variant"))]
     sim = out.get("proxy_simulated", {})
     proxy_rows = {f"search bar via {n}": {"summary": v["summary"]} for n, v in sim.items()}
 

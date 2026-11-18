@@ -50,7 +50,10 @@ class Params:
     max_moments: int = 6
 
 
-DEFAULT = Params()
+# The parameters as first shipped (tuned on four generated clips). The benchmark's baseline
+# and tests/test_ranking_equivalence.py pin these; DEFAULT is what search uses.
+LEGACY = Params()
+DEFAULT = LEGACY
 
 
 def with_(params: Params, **changes) -> Params:

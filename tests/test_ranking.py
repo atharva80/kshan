@@ -3,7 +3,7 @@ import math
 import pytest
 
 from vsearch import ranking
-from vsearch.ranking import DEFAULT, Hit, Params, fuse, probability, with_
+from vsearch.ranking import LEGACY, Hit, Params, fuse, probability, with_
 
 
 def vis(asset, sim=0.12, ms=0):
@@ -25,33 +25,33 @@ def by_asset(results):
 # --- fusion -----------------------------------------------------------------------------------
 class TestFusion:
     def test_legacy_is_best_plus_a_tenth_of_the_rest(self):
-        got = fuse({"visual": 0.5, "speech": 0.9, "text": 0.2}, {}, DEFAULT)
+        got = fuse({"visual": 0.5, "speech": 0.9, "text": 0.2}, {}, LEGACY)
         assert got == pytest.approx(0.9 + 0.1 * (0.5 + 0.2))
 
     def test_legacy_single_kind_is_its_score(self):
-        assert fuse({"text": 0.8}, {}, DEFAULT) == 0.8
+        assert fuse({"text": 0.8}, {}, LEGACY) == 0.8
 
     def test_legacy_end_to_end(self):
         # visual: a is 0.025 into the 0.05 wide band under the best frame (b) -> 0.4 + 0.6 * 0.5 = 0.7
         hits = [vis("a", 0.095), vis("b", 0.12), said("a")]
-        got = by_asset(ranking.rank(hits, "hello", DEFAULT))
+        got = by_asset(ranking.rank(hits, "hello", LEGACY))
         assert got["a"]["score"] == round(1.0 + 0.1 * 0.7, 3)  # exact speech 1.0 + a tenth of the visual
         assert got["a"]["matched"] == ["speech", "visual"]
         assert got["b"]["score"] == 1.0
 
     def test_rrf_two_kinds_beat_one_at_equal_ranks(self):
-        p = with_(DEFAULT, fusion="rrf")
+        p = with_(LEGACY, fusion="rrf")
         two = fuse({"visual": 1.0, "speech": 1.0}, {"visual": 1, "speech": 1}, p)
         one = fuse({"visual": 1.0}, {"visual": 1}, p)
         assert two == pytest.approx(2 / 61)
         assert two > one == pytest.approx(1 / 61)
 
     def test_rrf_rank_uses_k(self):
-        p = with_(DEFAULT, fusion="rrf", rrf_k=10)
+        p = with_(LEGACY, fusion="rrf", rrf_k=10)
         assert fuse({"visual": 0.1}, {"visual": 5}, p) == pytest.approx(1 / 15)
 
     def test_rrf_end_to_end(self):
-        p = with_(DEFAULT, fusion="rrf")
+        p = with_(LEGACY, fusion="rrf")
         # both videos rank 1 / 2 in visual; only "b" also matches speech (rank 1) -> b wins
         hits = [vis("a", 0.13), vis("b", 0.12), said("b")]
         results = ranking.rank(hits, "hello", p)
@@ -60,7 +60,7 @@ class TestFusion:
         assert results[1]["score"] == round(1 / 61, 6)
 
     def test_rrf_equal_ranks_end_to_end(self):
-        p = with_(DEFAULT, fusion="rrf")
+        p = with_(LEGACY, fusion="rrf")
         # "a" is visual rank 1 and speech rank 1; "b" is visual rank 2 only
         results = ranking.rank([vis("a", 0.13), vis("b", 0.12), said("a")], "hello", p)
         assert [v["assetId"] for v in results] == ["a", "b"]
@@ -69,23 +69,23 @@ class TestFusion:
 
     def test_calibrated_noisy_or(self):
         p1, p2 = 0.3, 0.6
-        assert fuse({"visual": p1, "speech": p2}, {}, with_(DEFAULT, fusion="calibrated")) == \
+        assert fuse({"visual": p1, "speech": p2}, {}, with_(LEGACY, fusion="calibrated")) == \
             pytest.approx(1 - (1 - p1) * (1 - p2))
 
     def test_calibrated_noisy_or_end_to_end(self):
-        p = with_(DEFAULT, fusion="calibrated", calibration=self.CAL)
+        p = with_(LEGACY, fusion="calibrated", calibration=self.CAL)
         (video,) = ranking.rank([vis("a", 0.12), said("a")], "hello", p)
         p1 = 1 / (1 + math.exp(-(50.0 * 0.12 - 3.0)))
         p2 = 1 / (1 + math.exp(-(2.0 * 1.0 - 0.5)))
         assert video["score"] == round(1 - (1 - p1) * (1 - p2), 6)
 
     def test_calibrated_uses_probability_not_the_threshold_score(self):
-        p = with_(DEFAULT, fusion="calibrated", calibration=self.CAL)
+        p = with_(LEGACY, fusion="calibrated", calibration=self.CAL)
         (video,) = ranking.rank([said("a")], "hello", p)
         assert video["best"]["score"] == round(probability(said("a"), p), 3)
 
     def test_calibrated_takes_best_probability_per_kind(self):
-        p = with_(DEFAULT, fusion="calibrated", calibration={"speech/exact": (0.0, 0.0), "speech/vec": (10.0, -6.0)})
+        p = with_(LEGACY, fusion="calibrated", calibration={"speech/exact": (0.0, 0.0), "speech/vec": (10.0, -6.0)})
         hits = [said("a", ms=0), said("a", ms=9000, method="vec", sim=0.9, text="y")]
         (video,) = ranking.rank(hits, "x y z", p)
         # exact: sigmoid(0) = 0.5; vec: sigmoid(3) ~ 0.953 -> speech kind keeps the larger
@@ -94,14 +94,14 @@ class TestFusion:
     def test_calibrated_min_prob_drops_unlikely_videos(self):
         cal = {"speech/exact": (0.0, 3.0), "text/exact": (0.0, -3.0)}  # p = 0.953 and 0.047
         hits = [said("likely"), ocr("unlikely")]
-        keep_all = ranking.rank(hits, "hello", with_(DEFAULT, fusion="calibrated", calibration=cal))
+        keep_all = ranking.rank(hits, "hello", with_(LEGACY, fusion="calibrated", calibration=cal))
         assert {v["assetId"] for v in keep_all} == {"likely", "unlikely"}
-        cut = ranking.rank(hits, "hello", with_(DEFAULT, fusion="calibrated", calibration=cal, min_prob=0.5))
+        cut = ranking.rank(hits, "hello", with_(LEGACY, fusion="calibrated", calibration=cal, min_prob=0.5))
         assert [v["assetId"] for v in cut] == ["likely"]
 
     def test_min_prob_only_applies_to_calibrated(self):
         hits = [said("a"), ocr("b")]
-        assert len(ranking.rank(hits, "hello", with_(DEFAULT, min_prob=0.99))) == 2
+        assert len(ranking.rank(hits, "hello", with_(LEGACY, min_prob=0.99))) == 2
 
     def test_unknown_calibration_key_is_a_coin_flip(self):
         assert probability(said("a"), Params()) == 0.5
@@ -118,14 +118,14 @@ class TestFilters:
     def test_translated_false_drops_translated_speech(self):
         hits = [said("a", translated=True), said("b"),
                 said("c", method="vec", sim=0.8, translated=True), said("d", method="vec", sim=0.8)]
-        both = ranking.rank(hits, "x y z", with_(DEFAULT, translated=True))
+        both = ranking.rank(hits, "x y z", with_(LEGACY, translated=True))
         assert {v["assetId"] for v in both} == {"a", "b", "c", "d"}
-        only_original = ranking.rank(hits, "x y z", with_(DEFAULT, translated=False))
+        only_original = ranking.rank(hits, "x y z", with_(LEGACY, translated=False))
         assert {v["assetId"] for v in only_original} == {"b", "d"}
 
     def test_translated_false_leaves_other_kinds_alone(self):
         hits = [vis("a"), ocr("b"), said("c", translated=True)]
-        got = ranking.rank(hits, "hello", with_(DEFAULT, translated=False))
+        got = ranking.rank(hits, "hello", with_(LEGACY, translated=False))
         assert {v["assetId"] for v in got} == {"a", "b"}
 
     def test_translated_moments_are_prefixed(self):
@@ -142,13 +142,13 @@ class TestFilters:
     ])
     def test_kinds_filter(self, kinds, expected):
         hits = [vis("v"), said("s"), ocr("t")]
-        got = ranking.rank(hits, "hello", with_(DEFAULT, kinds=kinds))
+        got = ranking.rank(hits, "hello", with_(LEGACY, kinds=kinds))
         assert {v["assetId"] for v in got} == expected
 
     def test_kinds_filter_applies_before_thresholds(self):
         # the strong visual match must not set the visual threshold when visual is excluded
         hits = [vis("a", 0.15), vis("b", 0.09)]
-        got = ranking.rank(hits, "x", with_(DEFAULT, kinds=("visual",)))
+        got = ranking.rank(hits, "x", with_(LEGACY, kinds=("visual",)))
         assert [v["assetId"] for v in got] == ["a", "b"]
 
 
@@ -214,7 +214,7 @@ class TestScoreAndGroup:
         hits = [ocr("a", ms=i * 10_000) for i in range(10)]
         (video,) = ranking.rank(hits, "x")
         assert len(video["moments"]) == 6
-        assert len(ranking.rank(hits, "x", with_(DEFAULT, max_moments=2))[0]["moments"]) == 2
+        assert len(ranking.rank(hits, "x", with_(LEGACY, max_moments=2))[0]["moments"]) == 2
 
     def test_moments_sorted_by_time_best_is_highest_score(self):
         hits = [said("a", ms=9000, method="vec", sim=0.8, text="x"), said("a", ms=0, method="vec", sim=0.9, text="y")]
