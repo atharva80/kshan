@@ -18,7 +18,7 @@ OWNED = """a.id = {col} and a."ownerId" = %(owner)s and a."deletedAt" is null
 
 # How "the exact words" are matched: "substr" is the original ILIKE '%query%', "word" is
 # lexical.py's word-boundary phrase match.
-LEXICAL = "substr"
+LEXICAL = "word"
 
 
 def _like(query: str) -> str:
