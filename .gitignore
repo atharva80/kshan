@@ -6,3 +6,5 @@ test/.vtest-credentials
 test/.vtest-baseline.json
 test/media/
 test/library/
+eval/data/
+eval/.venv/
