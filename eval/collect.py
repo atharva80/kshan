@@ -42,8 +42,8 @@ def compact(hits):
     return [[h.asset, h.ms, round(h.sim, 5), int(h.translated)] for h in hits]
 
 
-def main():
-    qs = [json.loads(line) for line in open(DATA / "queries.jsonl")]
+def main(queries_file="queries.jsonl", out_file="candidates.jsonl"):
+    qs = [json.loads(line) for line in open(DATA / queries_file)]
     texts = sorted({search.clean(q["query"]) for q in qs})
     with db.connect() as conn:
         owner = str(conn.execute('select id from "user" order by "createdAt" limit 1').fetchone()[0])
@@ -78,7 +78,7 @@ def main():
         return row
 
     t = time.time()
-    with ThreadPoolExecutor(6) as pool, open(DATA / "candidates.jsonl", "w") as out:
+    with ThreadPoolExecutor(6) as pool, open(DATA / out_file, "w") as out:
         for i, row in enumerate(pool.map(one, qs), 1):
             out.write(json.dumps(row) + "\n")
             if i % 250 == 0:
@@ -87,4 +87,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(*sys.argv[1:3])  # optional: a query subset and an output name, for smoke tests

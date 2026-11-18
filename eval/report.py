@@ -21,7 +21,7 @@ def _get(system, split, group, key):
 def headline(systems: dict, names: list[str], split: str) -> str:
     lines = ["| System | Charades R@1 | R@10 | MRR | moment@1 | FLEURS sentence R@1 | R@10 | FLEURS keyword R@1 | R@10 "
              "| no-answer FP | p50 ms | p95 ms |",
-             "|---|" + "---:|" * 12]
+             "|---|" + "---:|" * 11]
     for name in names:
         s = systems.get(name)
         if not s:
@@ -113,7 +113,7 @@ def markdown(out: dict, filename: str) -> str:
     if ix:
         parts.append(f"- Indexed {ix['done']} of {ix['videos']} videos ({ix['failed']} failed), "
                      f"{ix['video_hours']:.2f} h of video, in {ix['wall_seconds'] / 60:.0f} min wall time; "
-                     f"{ix['seconds_per_video_minute']:.1f} s of processing per minute of video "
+                     f"{ix['seconds_per_video_minute']:.1f} s of processing per minute of video (median {ix['median_seconds_per_video_minute']:.1f}; {ix['median_seconds_per_video']:.1f} s per video) "
                      "(frames + OCR + Whisper with translation + bge-m3, RTX 2000 Ada 8 GB).")
     parts += ["", "## Appendix: dev split", "", headline(systems, main, "dev"), "", headline(systems, fixes, "dev"), ""]
     return "\n".join(parts)

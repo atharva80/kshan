@@ -149,9 +149,14 @@ def indexing():
     done = [v for v in videos if v["status"] == "done"]
     video_s = sum(v["duration"] or 0 for v in done)
     took = sum(v["took"] or 0 for v in done)
+    # Per-minute rates from each video's own processing time: the wall time also covers
+    # restarts while Whisper was being moved off the CPU, so it overstates the real cost.
+    rates = [v["took"] / (v["duration"] / 60) for v in done if v["took"] and v["duration"]]
     return {"videos": len(videos), "done": len(done), "failed": len(videos) - len(done),
             "video_hours": video_s / 3600, "processing_seconds": took,
             "seconds_per_video_minute": took / (video_s / 60) if video_s else None,
+            "median_seconds_per_video": metrics.percentile([v["took"] for v in done if v["took"]], 50),
+            "median_seconds_per_video_minute": metrics.percentile(rates, 50),
             "wall_seconds": wall["wall_seconds"]}
 
 
