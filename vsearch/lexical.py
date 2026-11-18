@@ -11,8 +11,9 @@ import re
 
 # Word characters. Devanagari vowel signs and the virama are combining marks, which neither
 # Python's \\w nor POSIX [:alnum:] count as letters, so without them a boundary would fall
-# inside "कुत्ते" and the match would land mid-word.
-_MARKS = "̀-ͯऀ-ॿ"
+# inside "कुत्ते" and the match would land mid-word. The block's danda and double danda
+# (U+0964-0965, Hindi/Marathi full stops) are punctuation, so they stay out.
+_MARKS = "̀-ͯऀ-ॣ०-ॿ"
 _TOKEN = re.compile(rf"[\w{_MARKS}]+")
 _WORD = rf"[:alnum:]_{_MARKS}"
 _EDGE_START = rf"(^|[^{_WORD}])"
