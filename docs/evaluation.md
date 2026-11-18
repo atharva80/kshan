@@ -6,7 +6,7 @@ written by `eval/run.py`; the tables are in [eval/results.md](../eval/results.md
 
 ## Results (test split, 452 queries)
 
-From `eval/results/2026-11-19-03fa714.json`; full tables in [eval/results.md](../eval/results.md).
+From `eval/results/2026-11-19-cac6aa1.json`; full tables in [eval/results.md](../eval/results.md).
 
 | | Charades R@1 / R@10 | moment@1 | FLEURS sentence R@1 | FLEURS keyword R@1 | no-answer FP | p50 / p95 |
 |---|---|---|---|---|---|---|

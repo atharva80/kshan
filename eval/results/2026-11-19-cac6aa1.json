@@ -1,7 +1,7 @@
 {
- "commit": "03fa714",
+ "commit": "cac6aa1",
  "dirty": false,
- "date": "2026-11-19T04:43:04+05:30",
+ "date": "2026-11-19T04:59:59+05:30",
  "datasets": {
   "note": "Metadata only. Data rows live in eval/data/ (gitignored) and are rebuilt by `make eval-data`.",
   "seed": 2026,
