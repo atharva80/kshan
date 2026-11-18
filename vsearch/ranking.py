@@ -69,7 +69,10 @@ CALIBRATION = {
     "text/exact": (0.0, 3.2581),
     "text/fuzzy": (0.0, 0.0),
 }
-DEFAULT = with_(LEGACY, fusion="calibrated", calibration=CALIBRATION)
+DEFAULT = with_(LEGACY, fusion="calibrated", calibration=CALIBRATION,
+                # Fix C: floors chosen on dev for the fewest junk results on queries with no
+                # answer (no-answer false positives), within 1 point of recall@10
+                visual_floor=0.09, speech_floor=0.63, speech_floor_short=0.63)
 
 
 
