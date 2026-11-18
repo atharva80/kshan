@@ -13,7 +13,6 @@ log = logging.getLogger("vsearch.immich_search")
 # our results don't honour those filters.
 MERGEABLE_FIELDS = {"query", "page", "size", "withExif", "withDeleted", "language", "visibility", "type",
                     "withStacked", "isNotInAlbum"}
-EXACT = 0.95  # exact words said or written (and the very best visual match) score >= this
 
 
 def mergeable(body: dict) -> bool:
@@ -37,8 +36,8 @@ def blend(immich_items: list[dict], ours: list[dict]) -> list[str]:
     key: dict[str, float] = {}
     for i, item in enumerate(immich_items):
         key[item["id"]] = float(i)
-    exact = [r for r in ours
-             if any(m["kind"] in ("speech", "text") and m["score"] >= EXACT for m in r["moments"])]
+    # A flag rather than a score cut-off, so it means the same under every fusion method.
+    exact = [r for r in ours if any(m.get("exact") for m in r["moments"])]
     rest = [r for r in ours if r not in exact]
     for k, r in enumerate(exact):
         key[r["assetId"]] = -1000.0 + k

@@ -1,55 +1,61 @@
 """Query side: finds the moments inside a user's videos that match a search, by what's on
-screen (CLIP frames), what's said (transcripts), and what's written (OCR)."""
+screen (CLIP frames), what's said (transcripts), and what's written (OCR).
+
+This module only fetches candidates (SQL); thresholds, scoring and fusion live in
+ranking.py, so the offline evaluation in eval/ ranks exactly what the live search ranks."""
 import logging
 from bisect import bisect_right
 
-from . import db
+from . import db, lexical, ranking
+from .ranking import Hit
 
 log = logging.getLogger("vsearch.search")
-
-# Calibrated with test/calibrate.py. SigLIP2 image-text cosines: true matches 0.095-0.145,
-# non-matches <= 0.06. bge-m3 against transcripts + English translations: true paraphrases
-# >= 0.607, unrelated sentences <= 0.590 ("I am going to the office" vs "let's go to the park").
-VISUAL_FLOOR = 0.07      # below this a frame doesn't match at all
-VISUAL_SPREAD = 0.06     # keep videos within this much of the best match
-SPEECH_FLOOR = 0.60
-# 1-2 word queries embed vaguely ("a cat" scored 0.606 against a dog sentence); every true
-# short query in the tests was an exact word in the transcript/translation anyway.
-SPEECH_FLOOR_SHORT = 0.65
-SPEECH_SPREAD = 0.15
-MOMENT_GAP_MS = 2500     # moments closer than this collapse into one
-MAX_MOMENTS = 6
 
 KINDS = ("visual", "speech", "text")
 
 OWNED = """a.id = {col} and a."ownerId" = %(owner)s and a."deletedAt" is null
            and not a."isOffline" and a.visibility in ('timeline', 'archive')"""
 
+# How "the exact words" are matched: "substr" is the original ILIKE '%query%', "word" is
+# lexical.py's word-boundary phrase match.
+LEXICAL = "substr"
+
 
 def _like(query: str) -> str:
     return "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 
-def run(pool, ml, embedder, owner_id: str, query: str, kinds=KINDS, limit: int = 40) -> list[dict]:
-    query = " ".join(query.split())[:200]
+def clean(query: str) -> str:
+    return " ".join(query.split())[:200]
+
+
+def run(pool, ml, embedder, owner_id: str, query: str, kinds=KINDS, limit: int = 40,
+        params: ranking.Params = ranking.DEFAULT, lexical_mode: str | None = None) -> list[dict]:
+    query = clean(query)
     if not query:
         return []
-    params = {"owner": owner_id, "q": query, "like": _like(query)}
-    hits: list[tuple] = []
+    params = ranking.with_(params, kinds=tuple(k for k in params.kinds if k in kinds))
     with pool.connection() as conn:
-        if "visual" in kinds:
-            hits += _visual(conn, ml, db.immich_config(conn), params)
-        if "speech" in kinds:
-            hits += _speech(conn, embedder, params)
-        if "text" in kinds:
-            hits += _text(conn, params)
-        results = _group(hits, limit)
+        hits = candidates(conn, ml, embedder, owner_id, query, params.kinds, lexical_mode or LEXICAL)
+        results = ranking.rank(hits, query, params, limit)
         _decorate(conn, results)
     return results
 
 
-def _visual(conn, ml, cfg, params) -> list[tuple]:
-    vector = ml.text(params["q"], cfg.clip_model)
+def candidates(conn, ml, embedder, owner_id: str, query: str, kinds=KINDS, mode: str = LEXICAL) -> list[Hit]:
+    hits: list[Hit] = []
+    if "visual" in kinds:
+        hits += visual_hits(conn, ml, owner_id, query)
+    if "speech" in kinds:
+        hits += speech_exact_hits(conn, owner_id, query, mode)
+        hits += speech_vec_hits(conn, embedder, owner_id, query)
+    if "text" in kinds:
+        hits += text_hits(conn, owner_id, query, mode)
+    return hits
+
+
+def visual_hits(conn, ml, owner_id: str, query: str) -> list[Hit]:
+    vector = ml.text(query, db.immich_config(conn).clip_model)
     try:
         with conn.transaction():
             conn.execute("set local hnsw.ef_search = 400")
@@ -59,97 +65,70 @@ def _visual(conn, ml, cfg, params) -> list[tuple]:
                 from vsearch.frame f join asset a on {OWNED.format(col='f.asset_id')}
                 order by f.embedding <=> %(v)s
                 limit 400
-            """, {**params, "v": vector}).fetchall()
+            """, {"owner": owner_id, "v": vector}).fetchall()
     except Exception as e:  # e.g. Immich's model changed and frames aren't re-indexed yet
         log.warning("visual search unavailable: %s", e)
         return []
-    if not rows:
-        return []
-    best: dict = {}
-    for asset_id, _, sim in rows:
-        best[asset_id] = max(best.get(asset_id, -1.0), sim)
-    top = max(best.values())
-    cut = max(VISUAL_FLOOR, top - VISUAL_SPREAD)
-    return [(asset_id, ms, "visual", 0.4 + 0.6 * (sim - cut) / max(top - cut, 1e-6), None)
-            for asset_id, ms, sim in rows
-            if sim >= cut and sim >= best[asset_id] - 0.03]
+    return [Hit(str(a), ms, "visual", "vec", float(sim)) for a, ms, sim in rows]
 
 
-def _said(text: str, translated: bool) -> str:
-    return f"EN: {text}" if translated else text
+def speech_exact_hits(conn, owner_id: str, query: str, mode: str = LEXICAL) -> list[Hit]:
+    """The query's words in the transcript or its English translation."""
+    if mode == "word":
+        rx = lexical.pattern(query)
+        if rx is None:
+            return []
+        where, args = "s.text ~* %(rx)s", {"rx": rx}
+    else:
+        where, args = "s.text ilike %(like)s", {"like": _like(query)}
+    rows = conn.execute(f"""
+        select s.asset_id, s.start_ms, s.text, s.translated from vsearch.segment s
+        join asset a on {OWNED.format(col='s.asset_id')}
+        where {where}
+        order by s.asset_id, s.translated, s.start_ms
+        limit 200
+    """, {"owner": owner_id, **args}).fetchall()
+    return [Hit(str(a), ms, "speech", "exact", 1.0, text, translated) for a, ms, text, translated in rows]
 
 
-def _speech(conn, embedder, params) -> list[tuple]:
-    hits = []
-    seen = set()
-    owned = OWNED.format(col="s.asset_id")
-    # The exact words first (in the transcript or its English translation), then the meaning.
-    # bge-m3 also covers paraphrases; trigram fuzziness matched "a cat" to "a wish ... candles".
-    for asset_id, ms, text, translated in conn.execute(f"""
-        select s.asset_id, s.start_ms, s.text, s.translated from vsearch.segment s join asset a on {owned}
-        where s.text ilike %(like)s limit 200
-    """, params):
-        seen.add((asset_id, ms))
-        hits.append((asset_id, ms, "speech", 1.0, _said(text, translated)))
-    vector = embedder.embed([params["q"]])[0]
+def speech_vec_hits(conn, embedder, owner_id: str, query: str) -> list[Hit]:
+    """By meaning (bge-m3): paraphrases, and other languages."""
+    vector = embedder.embed([query])[0]
     rows = conn.execute(f"""
         select s.asset_id, s.start_ms, s.text, s.translated, 1 - (s.embedding <=> %(v)s) as sim
-        from vsearch.segment s join asset a on {owned}
+        from vsearch.segment s join asset a on {OWNED.format(col='s.asset_id')}
         order by s.embedding <=> %(v)s
         limit 100
-    """, {**params, "v": vector}).fetchall()
-    if rows:
-        floor = SPEECH_FLOOR if len(params["q"].split()) > 2 else SPEECH_FLOOR_SHORT
-        top = max(r[4] for r in rows)
-        cut = max(floor, top - SPEECH_SPREAD)
-        for asset_id, ms, text, translated, sim in rows:
-            if sim >= cut and (asset_id, ms) not in seen:
-                score = 0.4 + 0.45 * (sim - cut) / max(top - cut, 1e-6)
-                hits.append((asset_id, ms, "speech", score, _said(text, translated)))
-    return hits
+    """, {"owner": owner_id, "v": vector}).fetchall()
+    return [Hit(str(a), ms, "speech", "vec", float(sim), text, translated) for a, ms, text, translated, sim in rows]
 
 
-def _text(conn, params) -> list[tuple]:
+def text_hits(conn, owner_id: str, query: str, mode: str = LEXICAL) -> list[Hit]:
     owned = OWNED.format(col="f.asset_id")
-    # OCR often merges or splits words ("GOA2023"), so exact matching ignores spaces.
-    squashed = {**params, "squashed": _like("".join(params["q"].split()))}
-    exact = """(f.ocr ilike %(like)s or replace(f.ocr, ' ', '') ilike %(squashed)s)"""
-    hits = [(asset_id, ms, "text", 1.0, ocr) for asset_id, ms, ocr in conn.execute(f"""
+    if mode == "word":
+        rx = lexical.pattern(query, ocr=True)
+        exact, args = ("f.ocr ~* %(rx)s", {"rx": rx}) if rx else ("false", {})
+    else:
+        # OCR often merges or splits words ("GOA2023"), so exact matching ignores spaces.
+        exact = "(f.ocr ilike %(like)s or replace(f.ocr, ' ', '') ilike %(squashed)s)"
+        args = {"like": _like(query), "squashed": _like("".join(query.split()))}
+    hits = [Hit(str(a), ms, "text", "exact", 1.0, ocr) for a, ms, ocr in conn.execute(f"""
         select f.asset_id, f.ms, f.ocr from vsearch.frame f join asset a on {owned}
-        where {exact} limit 300
-    """, squashed)]
+        where {exact}
+        order by f.asset_id, f.ms
+        limit 300
+    """, {"owner": owner_id, **args})]
     # Misread letters ("DIWAL1"): strict word similarity, only for queries long enough
     # that trigrams mean something.
-    if len("".join(params["q"].split())) >= 5:
-        hits += [(asset_id, ms, "text", 0.8, ocr) for asset_id, ms, ocr in conn.execute(f"""
-            select f.asset_id, f.ms, f.ocr from vsearch.frame f join asset a on {owned}
-            where %(q)s <<%% f.ocr and not {exact} limit 300
-        """, squashed)]
+    if len("".join(query.split())) >= 5:
+        hits += [Hit(str(a), ms, "text", "fuzzy", float(sim), ocr) for a, ms, ocr, sim in conn.execute(f"""
+            select f.asset_id, f.ms, f.ocr, strict_word_similarity(%(q)s, f.ocr) from vsearch.frame f
+            join asset a on {owned}
+            where %(q)s <<%% f.ocr and not {exact}
+            order by f.asset_id, f.ms
+            limit 300
+        """, {"owner": owner_id, "q": query, **args})]
     return hits
-
-
-def _group(hits: list[tuple], limit: int) -> list[dict]:
-    videos: dict = {}
-    for asset_id, ms, kind, score, text in hits:
-        v = videos.setdefault(asset_id, {"assetId": str(asset_id), "kinds": {}, "moments": []})
-        v["kinds"][kind] = max(v["kinds"].get(kind, 0.0), score)
-        v["moments"].append({"ms": ms, "kind": kind, "score": round(score, 3), "text": text})
-    out = []
-    for v in videos.values():
-        scores = sorted(v["kinds"].values(), reverse=True)
-        v["score"] = round(scores[0] + 0.1 * sum(scores[1:]), 3)  # matching several ways ranks higher
-        picked: list[dict] = []
-        for m in sorted(v["moments"], key=lambda m: -m["score"]):
-            if all(m["kind"] != p["kind"] or abs(m["ms"] - p["ms"]) > MOMENT_GAP_MS for p in picked):
-                picked.append(m)
-            if len(picked) == MAX_MOMENTS:
-                break
-        v["best"] = picked[0]
-        v["moments"] = sorted(picked, key=lambda m: m["ms"])
-        v["matched"] = sorted(v.pop("kinds"))
-        out.append(v)
-    out.sort(key=lambda v: -v["score"])
-    return out[:limit]
 
 
 def _decorate(conn, results: list[dict]) -> None:
