@@ -1,0 +1,15 @@
+line-length = 120
+target-version = "py312"
+exclude = ["eval/data"]
+# eval/ is a folder of scripts that import each other (`from common import ...`), not a package
+src = [".", "eval"]
+
+[lint]
+select = ["E", "F", "W", "I"]
+
+[lint.per-file-ignores]
+# Long lines already in the existing code (SQL, prose in build_queries.py); not worth churning.
+# E501 stays on for tests/.
+"vsearch/*" = ["E501"]
+"eval/*" = ["E501"]
+"test/*" = ["E501"]

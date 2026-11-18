@@ -1,0 +1,6 @@
+# Test and lint tooling only. The runtime requirements.txt (torch, faster-whisper, ...) is NOT
+# needed: the unit-tested modules (vsearch.ranking, vsearch.lexical, vsearch.immich_search,
+# eval/metrics.py) are stdlib-only.
+pytest==9.2.0
+ruff==0.17.5
+psycopg[binary]==3.3.9
