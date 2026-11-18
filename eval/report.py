@@ -54,7 +54,8 @@ def by_language(systems: dict, names: list[str], split: str) -> str:
 
 def markdown(out: dict, filename: str) -> str:
     systems = out["systems"]
-    main = [n for n in ("immich_before", "immich_after", "vsearch (live)", "vsearch", "proxy (live)") if n in systems]
+    main = [n for n in ("immich_before", "immich_after", "vsearch (live)", "proxy (live)", "vsearch_fixed (live)",
+                          "proxy_fixed (live)") if n in systems]
     ablations = ["vsearch"] + [n for n in systems if n.startswith("ablation")]
     fixes = ["vsearch"] + [n for n in systems if n.startswith(("fix", "variant"))]
     sim = out.get("proxy_simulated", {})
@@ -107,9 +108,9 @@ def markdown(out: dict, filename: str) -> str:
                            [k for k in main if k.startswith("immich")] + list(proxy_rows), "test")]
     c, ix = out.get("consistency"), out.get("indexing")
     parts += ["", "## Consistency and indexing", ""]
-    if c:
-        parts.append(f"- Offline re-ranking reproduces the live search API's top 10 exactly on "
-                     f"{pct(c['top10_identical'])}% of {c['n']} queries.")
+    for live_name, v in (c or {}).items():
+        parts.append(f"- Offline re-ranking with `{v['config']}` reproduces the live API (`{live_name}`) top 10 "
+                     f"exactly on {pct(v['top10_identical'])}% of {v['n']} queries.")
     if ix:
         parts.append(f"- Indexed {ix['done']} of {ix['videos']} videos ({ix['failed']} failed), "
                      f"{ix['video_hours']:.2f} h of video, in {ix['wall_seconds'] / 60:.0f} min wall time; "

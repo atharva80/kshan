@@ -171,10 +171,10 @@ def main():
         rows = live_rows(qs, name)
         if rows:
             systems[name] = {"summary": summarise(qs, rows, False), "latency": latency(name), "source": "live"}
-    for name in ("vsearch", "proxy"):
+    for name in ("vsearch", "proxy", "vsearch_fixed", "proxy_fixed"):
         rows = live_rows(qs, name)
         if rows:
-            systems[f"{name} (live)"] = {"summary": summarise(qs, rows, name == "vsearch"),
+            systems[f"{name} (live)"] = {"summary": summarise(qs, rows, name.startswith("vsearch")),
                                          "latency": latency(name), "source": "live"}
 
     for name, (params, mode, desc) in configs().items():
@@ -205,17 +205,23 @@ def main():
 
 def consistency(qs, cands, assets):
     """The offline re-ranking must reproduce the live search exactly, or the fix numbers
-    mean nothing: share of queries whose top-10 matches the live API's."""
-    path = LIVE / "vsearch.jsonl"
-    if not path.exists():
-        return None
-    live = {r["qid"]: r["ranked"][:10] for r in read_jsonl(path)}
-    params, mode, _ = configs()["vsearch"]
-    same = 0
-    for q in qs:
-        results = ranking.rank(load_hits(cands[q["qid"]], mode), clean(q["query"]), params, 40)
-        same += [assets[r["assetId"]] for r in results][:10] == live[q["qid"]]
-    return {"top10_identical": same / len(qs), "n": len(qs)}
+    mean nothing: share of queries whose top-10 matches the live API's, before the fixes
+    (vsearch.jsonl vs the "vsearch" config) and after they shipped (vsearch_fixed.jsonl vs
+    the last fix config)."""
+    fixes = [n for n in configs() if n.startswith("fix")]
+    out = {}
+    for live_name, config in (("vsearch", "vsearch"), ("vsearch_fixed", fixes[-1] if fixes else None)):
+        path = LIVE / f"{live_name}.jsonl"
+        if config is None or not path.exists():
+            continue
+        live = {r["qid"]: r["ranked"][:10] for r in read_jsonl(path)}
+        params, mode, _ = configs()[config]
+        same = 0
+        for q in qs:
+            results = ranking.rank(load_hits(cands[q["qid"]], mode), clean(q["query"]), params, 40)
+            same += [assets[r["assetId"]] for r in results][:10] == live[q["qid"]]
+        out[live_name] = {"config": config, "top10_identical": same / len(qs), "n": len(qs)}
+    return out or None
 
 
 def _params(p: Params) -> dict:

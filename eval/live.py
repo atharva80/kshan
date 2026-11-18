@@ -4,6 +4,7 @@
   python3 eval/live.py immich_after    # plain Immich after vsearch's write-back (the phone app as-is)
   python3 eval/live.py vsearch         # the companion search page's API
   python3 eval/live.py proxy           # Immich's search bar routed through vsearch (POST /hook/smart-search)
+  python3 eval/live.py vsearch_fixed   # vsearch / proxy again, after the fixes became the defaults
 
 Rankings run 4 queries at a time; latency is then timed separately, one query at a time,
 on a fixed sample (store.latency_sample), so concurrency doesn't distort it."""
@@ -21,6 +22,7 @@ SIZE = 100
 
 
 def ask(system: str, query: str) -> dict:
+    system = system.removesuffix("_fixed")  # same endpoints, re-run after the fixes shipped
     if system in ("immich_before", "immich_after", "proxy"):
         url = f"{e2e.IMMICH}/search/smart" if system != "proxy" else "http://127.0.0.1:2294/hook/smart-search"
         status, body, _ = e2e.call("POST", url, {"query": query, "size": SIZE}, e2e.key_headers())
