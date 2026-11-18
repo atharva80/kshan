@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360">
+<text x="20" y="154" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#656d76">frames</text>
+<text x="20" y="226" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#656d76">speech</text>
+<text x="20" y="280" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#656d76">on screen</text>
+<rect x="151.5" y="122" width="74.5" height="56" rx="4" fill="#eaeef2"/>
+<rect x="174.8" y="152" width="28" height="14" rx="2" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<line x1="180.8" y1="145" x2="180.8" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<line x1="188.8" y1="145" x2="188.8" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<line x1="196.8" y1="145" x2="196.8" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<rect x="229.0" y="122" width="74.5" height="56" rx="4" fill="#eaeef2"/>
+<rect x="252.2" y="152" width="28" height="14" rx="2" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<line x1="258.2" y1="145" x2="258.2" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<line x1="266.2" y1="145" x2="266.2" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<line x1="274.2" y1="145" x2="274.2" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<rect x="306.5" y="122" width="74.5" height="56" rx="4" fill="#eaeef2"/>
+<rect x="329.8" y="152" width="28" height="14" rx="2" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<line x1="335.8" y1="145" x2="335.8" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<line x1="343.8" y1="145" x2="343.8" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<line x1="351.8" y1="145" x2="351.8" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<rect x="384.0" y="122" width="74.5" height="56" rx="4" fill="#eaeef2"/>
+<rect x="407.2" y="152" width="28" height="14" rx="2" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<line x1="413.2" y1="145" x2="413.2" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<line x1="421.2" y1="145" x2="421.2" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<line x1="429.2" y1="145" x2="429.2" y2="152" stroke="#656d76" stroke-width="1.4"/>
+<rect x="461.5" y="122" width="74.5" height="56" rx="4" fill="#dde3e9" stroke="#d9480f" stroke-width="2"/>
+<ellipse cx="496.8" cy="158" rx="13" ry="7" fill="none" stroke="#d9480f" stroke-width="1.4"/>
+<circle cx="511.8" cy="150" r="5.5" fill="none" stroke="#d9480f" stroke-width="1.4"/>
+<path d="M509.8,145 l-3,-5 l5,2" fill="none" stroke="#d9480f" stroke-width="1.4"/>
+<path d="M483.8,155 q-6,-6 -3,-11" fill="none" stroke="#d9480f" stroke-width="1.4"/>
+<rect x="539.0" y="122" width="74.5" height="56" rx="4" fill="#dde3e9"/>
+<ellipse cx="574.2" cy="158" rx="13" ry="7" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<circle cx="589.2" cy="150" r="5.5" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M587.2,145 l-3,-5 l5,2" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M561.2,155 q-6,-6 -3,-11" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<rect x="616.5" y="122" width="74.5" height="56" rx="4" fill="#dde3e9"/>
+<ellipse cx="651.8" cy="158" rx="13" ry="7" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<circle cx="666.8" cy="150" r="5.5" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M664.8,145 l-3,-5 l5,2" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M638.8,155 q-6,-6 -3,-11" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<rect x="694.0" y="122" width="74.5" height="56" rx="4" fill="#dde3e9"/>
+<ellipse cx="729.2" cy="158" rx="13" ry="7" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<circle cx="744.2" cy="150" r="5.5" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M742.2,145 l-3,-5 l5,2" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M716.2,155 q-6,-6 -3,-11" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<rect x="700.0" y="128" width="62.5" height="8" rx="1.5" fill="#d9480f" fill-opacity="0.9"/>
+<rect x="771.5" y="122" width="74.5" height="56" rx="4" fill="#dde3e9"/>
+<ellipse cx="806.8" cy="158" rx="13" ry="7" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<circle cx="821.8" cy="150" r="5.5" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M819.8,145 l-3,-5 l5,2" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M793.8,155 q-6,-6 -3,-11" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<rect x="777.5" y="128" width="62.5" height="8" rx="1.5" fill="#656d76" fill-opacity="0.5"/>
+<rect x="849.0" y="122" width="74.5" height="56" rx="4" fill="#dde3e9"/>
+<ellipse cx="884.2" cy="158" rx="13" ry="7" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<circle cx="899.2" cy="150" r="5.5" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M897.2,145 l-3,-5 l5,2" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M871.2,155 q-6,-6 -3,-11" fill="none" stroke="#656d76" stroke-width="1.4"/>
+<path d="M150.0,222.6 L152.2,221.4 L154.3,222.6 L156.5,221.4 L158.6,222.6 L160.8,221.4 L162.9,222.6 L165.1,221.4 L167.2,222.6 L169.4,221.4 L171.5,222.6 L173.7,221.4 L175.8,231.5 L178.0,212.1 L180.1,228.5 L182.3,220.1 L184.4,223.3 L186.6,220.3 L188.8,222.1 L190.9,220.0 L193.1,223.8 L195.2,220.6 L197.4,228.2 L199.5,212.1 L201.7,232.1 L203.8,216.1 L206.0,223.4 L208.1,213.5 L210.3,234.4 L212.4,210.6 L214.6,228.3 L216.7,221.9 L218.9,226.7 L221.0,216.0 L223.2,226.1 L225.3,220.7 L227.5,222.0 L229.7,220.8 L231.8,226.2 L234.0,215.4 L236.1,228.1 L238.3,220.1 L240.4,226.6 L242.6,211.5 L244.7,234.8 L246.9,211.8 L249.0,225.7 L251.2,218.2 L253.3,230.9 L255.5,212.2 L257.6,228.8 L259.8,219.6 L261.9,222.9 L264.1,220.6 L266.2,222.3 L268.4,219.7 L270.6,224.2 L272.7,221.2 L274.9,227.7 L277.0,212.1 L279.2,232.7 L281.3,215.1 L283.5,222.2 L285.6,214.4 L287.8,234.0 L289.9,210.4 L292.1,229.0 L294.2,221.2 L296.4,226.0 L298.5,216.4 L300.7,226.0 L302.8,220.7 L305.0,222.1 L307.2,220.9 L309.3,226.2 L311.5,215.1 L313.6,228.8 L315.8,219.1 L317.9,225.7 L320.1,212.0 L322.2,234.9 L324.4,211.1 L326.5,226.7 L328.7,219.3 L330.8,230.1 L333.0,221.4 L335.1,222.6 L337.3,221.4 L339.4,222.6" fill="none" stroke="#656d76" stroke-width="1.1"/>
+<path d="M621.5,221.4 L623.6,222.6 L625.8,221.4 L627.9,222.6 L630.1,221.4 L632.2,222.6 L634.4,221.4 L636.5,222.6 L638.7,221.4 L640.8,222.6 L643.0,221.4 L645.1,222.6 L647.3,221.4 L649.4,222.6 L651.6,221.4 L653.8,222.6 L655.9,221.4 L658.1,222.6 L660.2,221.4 L662.4,222.6 L664.5,221.4 L666.7,222.6 L668.8,221.4 L671.0,222.6 L673.1,221.4 L675.3,222.6 L677.4,221.4 L679.6,222.6 L681.7,221.4 L683.9,222.6 L686.0,221.4 L688.2,222.6 L690.3,221.4 L692.5,222.6 L694.7,221.4 L696.8,222.6 L699.0,221.4 L701.1,222.6 L703.3,221.4 L705.4,222.6 L707.6,221.4 L709.7,222.6 L711.9,221.4 L714.0,222.6 L716.2,221.4 L718.3,222.6 L720.5,221.4 L722.6,222.6 L724.8,221.4 L726.9,222.6 L729.1,221.4 L731.2,222.6 L733.4,221.4 L735.6,222.6 L737.7,221.4 L739.9,222.6 L742.0,221.4 L744.2,222.6 L746.3,221.4 L748.5,222.6 L750.6,221.4 L752.8,222.6 L754.9,221.4 L757.1,222.6 L759.2,221.4 L761.4,222.6 L763.5,221.4 L765.7,222.6 L767.8,221.4 L770.0,222.6 L772.2,221.4 L774.3,222.6 L776.5,221.4 L778.6,222.6 L780.8,221.4 L782.9,222.6 L785.1,221.4 L787.2,222.6 L789.4,221.4 L791.5,222.6 L793.7,221.4 L795.8,222.6 L798.0,221.4 L800.1,222.6 L802.3,221.4 L804.4,222.6 L806.6,221.4 L808.8,222.6 L810.9,221.4 L813.1,222.6 L815.2,221.4 L817.4,222.6 L819.5,221.4 L821.7,222.6 L823.8,221.4 L826.0,222.6 L828.1,221.4 L830.3,222.6 L832.4,221.4 L834.6,222.6 L836.7,221.4 L838.9,222.6 L841.0,221.4 L843.2,222.6 L845.3,221.4 L847.5,222.6 L849.7,221.4 L851.8,222.6 L854.0,221.4 L856.1,222.6 L858.3,221.4 L860.4,222.6 L862.6,221.4 L864.7,222.6 L866.9,221.4 L869.0,222.6 L871.2,221.4 L873.3,222.6 L875.5,221.4 L877.6,222.6 L879.8,221.4 L881.9,222.6 L884.1,221.4 L886.2,222.6 L888.4,221.4 L890.6,222.6 L892.7,221.4 L894.9,222.6 L897.0,221.4 L899.2,222.6 L901.3,221.4 L903.5,222.6 L905.6,221.4 L907.8,222.6 L909.9,221.4 L912.1,222.6 L914.2,221.4 L916.4,222.6 L918.5,221.4 L920.7,222.6 L922.8,221.4 L925.0,222.6" fill="none" stroke="#656d76" stroke-width="1.1"/>
+<path d="M227.5,222.0 L229.7,220.8 L231.8,226.2 L234.0,215.4 L236.1,228.1 L238.3,220.1 L240.4,226.6 L242.6,211.5 L244.7,234.8 L246.9,211.8 L249.0,225.7 L251.2,218.2 L253.3,230.9 L255.5,212.2 L257.6,228.8 L259.8,219.6 L261.9,222.9 L264.1,220.6 L266.2,222.3 L268.4,219.7 L270.6,224.2 L272.7,221.2 L274.9,227.7 L277.0,212.1 L279.2,232.7 L281.3,215.1 L283.5,222.2 L285.6,214.4 L287.8,234.0 L289.9,210.4 L292.1,229.0 L294.2,221.2 L296.4,226.0 L298.5,216.4 L300.7,226.0 L302.8,220.7 L305.0,222.1" fill="none" stroke="#d9480f" stroke-width="1.6"/>
+<text x="346.3" y="218" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#1f2328">चलो, केक काटते हैं</text>
+<text x="346.3" y="236" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#656d76">Hindi, translated: "come on, let's cut the cake"</text>
+<rect x="692.5" y="264" width="155.0" height="22" rx="4" fill="#fff1ea" stroke="#d9480f" stroke-width="1.2"/>
+<text x="770.0" y="279" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" letter-spacing="1" fill="#d9480f">HAPPY B'DAY</text>
+<line x1="150" y1="312" x2="925" y2="312" stroke="#d0d7de" stroke-width="1"/>
+<line x1="150.0" y1="308" x2="150.0" y2="316" stroke="#d0d7de"/>
+<text x="150.0" y="334" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#656d76">0:00</text>
+<line x1="279.2" y1="308" x2="279.2" y2="316" stroke="#d0d7de"/>
+<text x="279.2" y="334" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#656d76">0:05</text>
+<line x1="408.3" y1="308" x2="408.3" y2="316" stroke="#d0d7de"/>
+<text x="408.3" y="334" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#656d76">0:10</text>
+<line x1="537.5" y1="308" x2="537.5" y2="316" stroke="#d0d7de"/>
+<text x="537.5" y="334" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#656d76">0:15</text>
+<line x1="666.7" y1="308" x2="666.7" y2="316" stroke="#d0d7de"/>
+<text x="666.7" y="334" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#656d76">0:20</text>
+<line x1="795.8" y1="308" x2="795.8" y2="316" stroke="#d0d7de"/>
+<text x="795.8" y="334" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#656d76">0:25</text>
+<line x1="925.0" y1="308" x2="925.0" y2="316" stroke="#d0d7de"/>
+<text x="925.0" y="334" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#656d76">0:30</text>
+<text x="227.5" y="40" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#1f2328">"cut the cake"</text>
+<text x="227.5" y="60" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#656d76">said, in Hindi · plays from 0:03</text>
+<line x1="227.5" y1="70" x2="227.5" y2="208" stroke="#d9480f" stroke-width="1.3" stroke-dasharray="3 3"/>
+<circle cx="227.5" cy="210" r="3.5" fill="#d9480f"/>
+<line x1="227.5" y1="300" x2="227.5" y2="312" stroke="#d9480f" stroke-width="2"/>
+<text x="460.0" y="40" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#1f2328">"dog"</text>
+<text x="460.0" y="60" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#656d76">seen · plays from 0:12</text>
+<line x1="460.0" y1="70" x2="460.0" y2="138" stroke="#d9480f" stroke-width="1.3" stroke-dasharray="3 3"/>
+<circle cx="460.0" cy="140" r="3.5" fill="#d9480f"/>
+<line x1="460.0" y1="300" x2="460.0" y2="312" stroke="#d9480f" stroke-width="2"/>
+<text x="692.5" y="40" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#1f2328">"happy birthday"</text>
+<text x="692.5" y="60" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" fill="#656d76">written · plays from 0:21</text>
+<line x1="692.5" y1="70" x2="692.5" y2="264" stroke="#d9480f" stroke-width="1.3" stroke-dasharray="3 3"/>
+<circle cx="692.5" cy="266" r="3.5" fill="#d9480f"/>
+<line x1="692.5" y1="300" x2="692.5" y2="312" stroke="#d9480f" stroke-width="2"/>
+</svg>
